@@ -1,34 +1,36 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
-import requests
-from PIL import Image, ImageTk
-import io
+from flask import Flask, request, render_template
+import tensorflow as tf
+import numpy as np
+import cv2
 
-def upload_image():
-    filepath = filedialog.askopenfilename(title="Select an Image", filetypes=[("Image files", "*.jpg;*.jpeg;*.png")])
-    if filepath:
-        # Open the image and display it
-        img = Image.open(filepath)
-        img.thumbnail((200, 200))
-        img = ImageTk.PhotoImage(img)
-        img_label.config(image=img)
-        img_label.image = img
+app = Flask(__name__)
 
-        # Send the image to Flask server for prediction
+model = tf.keras.models.load_model("models/plant_disease_model.h5")
 
-# Set up the GUI window
-root = tk.Tk()
-root.title("Plant Disease Prediction")
 
-# Create and pack widgets
-upload_button = tk.Button(root, text="Upload Image", command=upload_image)
-upload_button.pack(pady=20)
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-img_label = tk.Label(root)
-img_label.pack()
 
-result_label = tk.Label(root, text="Prediction will appear here.", font=("Helvetica", 14))
-result_label.pack(pady=20)
+@app.route("/predict", methods=["POST"])
+def predict():
+    if "file" not in request.files:
+        return "No file part"
+    file = request.files["file"]
+    if file.filename == "":
+        return "No selected file"
 
-# Run the GUI main loop
-root.mainloop()
+    img = cv2.imdecode(np.fromstring(file.read(), np.uint8), cv2.IMREAD_COLOR)
+    img = cv2.resize(img, (224, 224)) / 255.0
+    img = np.expand_dims(img, axis=0)
+
+    prediction = model.predict(img)
+    class_idx = np.argmax(prediction)
+    class_name = label[class_idx]
+
+    return f"Predicted disease: {class_name}"
+
+
+if __name__ == "__main__":
+    app.run(debug=True)

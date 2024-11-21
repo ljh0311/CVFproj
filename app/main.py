@@ -9,20 +9,18 @@ data_dir = "CVFProj/data"
 image_size = (224, 224)  # Expected image size for the model
 epochs = 10
 batch_size = 32
-model_to_train = "fine_tuned"  # Can be 'cnn' or 'fine_tuned'
+model_to_train = 'fine_tuned'  # Can be 'cnn' or 'fine_tuned'
 
 # Load images and labels using the preprocessing function
 images, labels = preprocess_images(data_dir, target_size=image_size)
 
 # Split the data into training and validation sets (80% train, 20% validation)
-X_train, X_val, y_train, y_val = train_test_split(
-    images, labels, test_size=0.2, random_state=42
-)
+X_train, X_val, y_train, y_val = train_test_split(images, labels, test_size=0.2, random_state=42)
 
 # Select the model to train based on the model_to_train variable
-if model_to_train == "cnn":
+if model_to_train == 'cnn':
     model = create_cnn_model()
-elif model_to_train == "fine_tuned":
+elif model_to_train == 'fine_tuned':
     model = create_fine_tuned_model()
 else:
     raise ValueError("Invalid model type specified. Choose 'cnn' or 'fine_tuned'.")
@@ -43,8 +41,7 @@ early_stopping = EarlyStopping(
 
 # Train the selected model
 history = model.fit(
-    X_train,
-    y_train,
+    X_train, y_train,
     validation_data=(X_val, y_val),
     epochs=epochs,
     batch_size=batch_size,
