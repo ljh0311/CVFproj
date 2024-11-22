@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Disease Prediction</title>
+</head>
+<body>
+    <h1>Plant Disease Prediction</h1>
+    <form action="/predict" method="POST" enctype="multipart/form-data">
+        <label for="model">Select Model:</label>
+        <select name="model" id="model">
+            {% for model_name in model_names %}
+                <option value="{{ model_name }}">{{ model_name }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+        <label for="file">Upload Image:</label>
+        <input type="file" name="file" id="file" accept="image/*">
+        <br><br>
+        <button type="submit">Predict</button>
+    </form>
+</body>
+</html>
