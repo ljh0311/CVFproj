@@ -1,2 +1,2 @@
 # Ignore all files in the specified train directory
-/data/New Plant Diseases Dataset(Augmented)/train/*
+/data/plantDataset/*
