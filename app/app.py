@@ -1,19 +1,12 @@
 from flask import Flask, request, render_template
+import requests
 import tensorflow as tf
 import numpy as np
 import cv2
-
-app = Flask(__name__)
-
-# Define available models and their file paths
-models = {
-    "cnn": "models/cnn_model.h5",
-    "fine_tuned": "models/fine_tuned_model.h5",
-}
-
-# Load the models into memory
 import os  # Import for file existence check
 import tensorflow as tf
+
+app = Flask(__name__)
 
 # Define available models and their file paths
 models = {
@@ -32,6 +25,16 @@ for name, path in models.items():
             print(f"Error loading model '{name}': {e}")
     else:
         print(f"Model file for '{name}' does not exist at {path}.")
+        
+@app.route('/load_model', methods=['POST'])
+def load_model():
+    selected_model = request.form.get('model_name')
+    if selected_model:
+        # Send the selected model name to main.py for loading
+        response = requests.post('http://127.0.0.1:5001/load_model', json={"model_name": selected_model})
+        return response.text
+    return "No model selected"
+
 
 # Define class labels
 labels = ["Disease A", "Disease B", "Healthy"]  # Replace with your actual class names
