@@ -1,2 +1,7 @@
 # Ignore all files in the specified train directory
-/data/plantDataset/*
+/data/*
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
