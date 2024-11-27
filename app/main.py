@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, transforms, models
 from PIL import Image
 import os
+import matplotlib.pyplot as plt
 
 # Configuration
 class Config:
@@ -33,16 +34,41 @@ class DataTransforms:
     @staticmethod
     def get_transforms():
         train_transform = transforms.Compose([
-            transforms.Resize(Config.IMAGE_SIZE),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2),
+            # Resize and crop
+            transforms.Resize(int(Config.IMAGE_SIZE[0] * 1.1)),  # Resize larger for random crop
+            transforms.RandomCrop(Config.IMAGE_SIZE),
+            
+            # Color and lighting augmentations
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.2),
+            transforms.RandomRotation(20),
+            transforms.ColorJitter(
+                brightness=0.2, 
+                contrast=0.2, 
+                saturation=0.2, 
+                hue=0.1
+            ),
+            
+            # Advanced augmentations
+            transforms.RandomAffine(
+                degrees=15, 
+                translate=(0.1, 0.1), 
+                scale=(0.9, 1.1)
+            ),
+            transforms.RandomPerspective(distortion_scale=0.2, p=0.2),
+            
+            # Random erasing (simulates occlusion)
             transforms.ToTensor(),
+            transforms.RandomErasing(p=0.2),
+            
+            # Normalization
             transforms.Normalize(mean=Config.NORMALIZE_MEAN, std=Config.NORMALIZE_STD),
         ])
 
+        # Validation transform remains simple
         val_transform = transforms.Compose([
             transforms.Resize(Config.IMAGE_SIZE),
+            transforms.CenterCrop(Config.IMAGE_SIZE),  # Consistent center crop
             transforms.ToTensor(),
             transforms.Normalize(mean=Config.NORMALIZE_MEAN, std=Config.NORMALIZE_STD),
         ])
@@ -100,7 +126,17 @@ def create_model(num_classes):
 
     return model
 
-# Loss Function and Optimizer
+# Create dataset and dataloaders first
+train_dataset = CustomImageDataset(Config.DATA_DIR, transform=DataTransforms.get_transforms()[0])
+val_dataset = CustomImageDataset(Config.VAL_DIR, transform=DataTransforms.get_transforms()[1])
+test_dataset = CustomImageDataset(Config.TEST_DIR, transform=DataTransforms.get_transforms()[1])
+
+# Then create the model
+num_classes = len(train_dataset.classes)
+model = create_model(num_classes)
+model = model.to(Config.DEVICE)
+
+# Move these lines here, after model creation
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=Config.LR)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=3, verbose=True)
@@ -177,17 +213,6 @@ dataloaders = {
     "test": DataLoader(test_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=0),
 }
 
-# Create the model
-num_classes = len(train_dataset.classes)
-model = create_model(num_classes)
-model = model.to(Config.DEVICE)
-
-# Create the model
-num_classes = len(train_dataset.classes)
-model = create_model(num_classes)
-model = model.to(Config.DEVICE)
-
-# device=torch.device("cuda:0")
 device = torch.device("cpu")
 
 best_valid_loss = float("inf")
@@ -231,3 +256,32 @@ print("Model saved!")
 print(f"Training samples: {len(train_dataset)}")
 print(f"Validation samples: {len(val_dataset)}")
 print(f"Test samples: {len(test_dataset)}")
+
+def visualize_augmentations(image_path, num_samples=5):
+    """
+    Visualize the effects of data augmentation on a single image
+    """
+    original_image = Image.open(image_path).convert('RGB')
+    train_transform, _ = DataTransforms.get_transforms()
+    
+    plt.figure(figsize=(15, 3))
+    plt.subplot(1, num_samples + 1, 1)
+    plt.imshow(original_image)
+    plt.title('Original')
+    plt.axis('off')
+    
+    for i in range(num_samples):
+        augmented = train_transform(original_image)
+        augmented = augmented.permute(1, 2, 0).numpy()
+        augmented = (augmented * Config.NORMALIZE_STD + Config.NORMALIZE_MEAN).clip(0, 1)
+        
+        plt.subplot(1, num_samples + 1, i + 2)
+        plt.imshow(augmented)
+        plt.title(f'Augmented {i+1}')
+        plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
+
+# Usage example:
+# visualize_augmentations('path/to/sample/image.jpg')

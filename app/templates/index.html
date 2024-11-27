@@ -4,21 +4,77 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plant Disease Prediction</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            text-align: center;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            background-color: white;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+
+        select, input, button {
+            padding: 8px;
+            margin: 5px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
 </head>
 <body>
-    <h1>Plant Disease Prediction</h1>
-    <form action="/predict" method="POST" enctype="multipart/form-data">
-        <label for="model">Select Model:</label>
-        <select name="model" id="model">
-            {% for model_name in model_names %}
-                <option value="{{ model_name }}">{{ model_name }}</option>
-            {% endfor %}
-        </select>
-        <br><br>
-        <label for="file">Upload Image:</label>
-        <input type="file" name="file" id="file" accept="image/*">
-        <br><br>
-        <button type="submit">Predict</button>
-    </form>
+    <div class="container">
+        <h1>Plant Disease Prediction</h1>
+        <form action="/predict" method="POST" enctype="multipart/form-data">
+            <div>
+                <label for="model">Select Model:</label>
+                <select name="model" id="model">
+                    {% for model_name in model_names %}
+                        <option value="{{ model_name }}">{{ model_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="file">Upload Image:</label>
+                <input type="file" name="file" id="file" accept="image/*">
+            </div>
+            <button type="submit">Predict</button>
+        </form>
+        
+        {% if prediction %}
+        <div class="results">
+            <h2>Results:</h2>
+            <p>Disease Label: {{ prediction.label }}</p>
+            <p>Confidence Score: {{ prediction.confidence }}%</p>
+        </div>
+        {% endif %}
+    </div>
 </body>
 </html>
