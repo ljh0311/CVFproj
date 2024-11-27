@@ -3,6 +3,27 @@ from torchvision import transforms
 from PIL import Image
 import os
 from torch.utils.data import Dataset
+import kagglehub
+import shutil
+
+# Create data directory if it doesn't exist
+os.makedirs('/data', exist_ok=True)
+
+# Download dataset
+if not os.path.exists("/data/plantDataset"):
+    path = kagglehub.dataset_download("vipoooool/new-plant-diseases-dataset")
+    # Define source and destination paths
+    source_dir = os.path.join(path, "New Plant Diseases Dataset(Augmented)")
+    dest_dir = "/data/plantDataset"
+
+# Remove destination directory if it already exists
+if os.path.exists(dest_dir):
+    shutil.rmtree(dest_dir)
+
+# Copy and rename the directory
+shutil.copytree(source_dir, dest_dir)
+
+print(f"Dataset downloaded and extracted to: {dest_dir}")
 
 class CustomImageDataset(Dataset):
     def __init__(self, data_dir, transform=None):
