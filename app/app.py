@@ -10,8 +10,8 @@ app = Flask(__name__)
 
 # Define available models and their file paths
 models = {
-    "cnn": "models/cnn_model.h5",
-    "fine_tuned": "models/fine_tuned_model.h5",
+    "resnet": "models/resnet_model.h5",
+    "resnet_finetuned": "models/resnet_finetuned_model.h5",
 }
 
 # Load models into memory if the files exist

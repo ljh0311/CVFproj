@@ -1,44 +1,45 @@
-from tensorflow.keras import layers, models
-from tensorflow.keras.applications import ResNet50
+import torch
+import torch.nn as nn
+from torchvision import models
 
+class SimpleCNN(nn.Module):
+    def __init__(self, num_classes=38):
+        super(SimpleCNN, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(32, 64, kernel_size=3),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2)
+        )
+        # Calculate the size after convolutions and pooling
+        self.flatten = nn.Flatten()
+        self.classifier = nn.Sequential(
+            nn.Linear(64 * 54 * 54, 128),  # Size will depend on input image size
+            nn.ReLU(),
+            nn.Linear(128, num_classes)
+        )
 
-# Function to create a simple CNN model
-def create_cnn_model(input_shape=(224, 224, 3), num_classes=38):
-    model = models.Sequential(
-        [
-            layers.Conv2D(32, (3, 3), activation="relu", input_shape=input_shape),
-            layers.MaxPooling2D((2, 2)),
-            layers.Conv2D(64, (3, 3), activation="relu"),
-            layers.MaxPooling2D((2, 2)),
-            layers.Flatten(),
-            layers.Dense(128, activation="relu"),
-            layers.Dense(num_classes, activation="softmax"),
-        ]
-    )
-    model.compile(
-        optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
-    )
-    return model
+    def forward(self, x):
+        x = self.features(x)
+        x = self.flatten(x)
+        x = self.classifier(x)
+        return x
 
-
-# Function to create a fine-tuned ResNet50 model
-def create_fine_tuned_model(input_shape=(224, 224, 3), num_classes=38):
-    # Load the pre-trained ResNet50 model without the top (classification) layers
-    base_model = ResNet50(
-        weights="imagenet", include_top=False, input_shape=input_shape
+def create_fine_tuned_model(num_classes=38, pretrained=True):
+    # Load the pre-trained ResNet50 model
+    model = models.resnet50(pretrained=pretrained)
+    
+    # Freeze the parameters
+    for param in model.parameters():
+        param.requires_grad = False
+    
+    # Replace the final fully connected layer
+    model.fc = nn.Sequential(
+        nn.Linear(model.fc.in_features, 128),
+        nn.ReLU(),
+        nn.Linear(128, num_classes)
     )
-    base_model.trainable = False  # Freeze the layers of the base model
-
-    # Create the full model with custom top layers
-    model = models.Sequential(
-        [
-            base_model,
-            layers.GlobalAveragePooling2D(),
-            layers.Dense(128, activation="relu"),
-            layers.Dense(num_classes, activation="softmax"),
-        ]
-    )
-    model.compile(
-        optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
-    )
+    
     return model
