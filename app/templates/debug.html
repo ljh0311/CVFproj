@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Information - Plant Disease Prediction</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="bg-light">
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Debug Information</h5>
+                            <a href="{{ url_for('home') }}" class="btn btn-sm btn-light">Back to Home</a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row">Available Models:</th>
+                                        <td>{{ total_models if total_models is defined else 0 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">Model Names:</th>
+                                        <td>{% if model_names %}{{ model_names|join(', ') }}{% else %}None{% endif %}</td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">Model Directory:</th>
+                                        <td>{{ model_dir if model_dir else 'Not specified' }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">Error:</th>
+                                        <td class="{% if error %}text-danger{% endif %}">
+                                            {{ error if error else 'None' }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Additional Debug Information -->
+                        <div class="mt-4">
+                            <h6 class="mb-3">Model Files Status:</h6>
+                            <ul class="list-group">
+                                {% for model_name, info in models.items() %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ model_name }}
+                                    <span class="badge {% if info.exists %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
+                                        {% if info.exists %}Found{% else %}Missing{% endif %}
+                                    </span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        <!-- Add this after the model status section -->
+                        <div class="mt-5">
+                            <h6 class="mb-3">Training History:</h6>
+                            <div class="row">
+                                {% for model_name, info in models.items() %}
+                                    {% if info.plot %}
+                                        <div class="col-12 mb-4">
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0">{{ model_name }} Training History</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <img src="{{ info.plot }}" 
+                                                         class="img-fluid" 
+                                                         alt="{{ model_name }} training history"
+                                                         style="width: 100%; height: auto;">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Add this if no plots are available -->
+                        {% if not models|map(attribute='plot')|select|list %}
+                            <div class="alert alert-info mt-4">
+                                No training history plots available. Train the models to see their performance graphs.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

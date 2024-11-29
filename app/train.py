@@ -4,9 +4,20 @@ from torch.utils.data import DataLoader
 from app.config import Config
 from app.data.dataset import CustomImageDataset
 from app.data.transforms import DataTransforms
-from app.utils.dataset_manager import DatasetManager
+from utils.dataset_manager import DatasetManager
 from app.models.model import ModelBuilder, Trainer
-from app.utils.visualization import plot_training_history
+from utils.visualization import plot_training_history
+
+
+def get_next_version(model_type):
+    """Get the next available version number for the model."""
+    model_dir = os.path.join(Config.BASE_DIR, "models")
+    existing_models = [f for f in os.listdir(model_dir) if f.startswith(model_type)]
+    if not existing_models:
+        return "1.0"
+    
+    versions = [float(f.split('_v')[1].split('.pth')[0]) for f in existing_models]
+    return f"{max(versions) + 1.0:.1f}"
 
 
 def main():
@@ -63,9 +74,15 @@ def main():
             transform=train_transform,
         )
 
-        # Store number of classes
+        # Store number of classes and save class names
         num_classes = len(full_dataset.classes)
         class_names = full_dataset.classes
+        
+        # Save class names to a file
+        class_names_path = os.path.join(Config.BASE_DIR, "models", "class_names.txt")
+        with open(class_names_path, 'w') as f:
+            for idx, class_name in enumerate(class_names):
+                f.write(f"{idx}:{class_name}\n")
 
         # Create splits while preserving class information
         total_size = len(full_dataset)
@@ -116,6 +133,10 @@ def main():
     try:
         print("\nInitializing model...")
         model = ModelBuilder.create_model(len(train_dataset.classes))
+        model_type = model.__class__.__name__
+        version = get_next_version(model_type)
+        model_type_versioned = f"{model_type}_v{version}"
+        print(f"Creating model: {model_type_versioned}")
         model = model.to(Config.DEVICE)
         print(f"Model created with {len(train_dataset.classes)} output classes")
         print(f"Using device: {Config.DEVICE}")
@@ -143,16 +164,23 @@ def main():
     try:
         print("\nEvaluating on test set...")
         test_loss, test_acc = trainer.evaluate(dataloaders["test"])
-        print(f"Final Test Accuracy: {test_acc*100:.2f}%")
+        print(f"Final Test Accuracy: {test_acc:.2f}%")
 
     except Exception as e:
         print(f"\nError during evaluation: {str(e)}")
 
-    # 6. Plot results
+    # 6. Plot and save results
     try:
-        plot_training_history(*history)
+        print("\nGenerating and saving training plots...")
+        plot_path = plot_training_history(
+            train_losses=history[0],
+            val_losses=history[1],
+            val_accuracies=history[2],
+            model_name=model_type_versioned  # Use versioned name
+        )
+        print(f"Training plots saved to: {plot_path}")
     except Exception as e:
-        print(f"\nError plotting results: {str(e)}")
+        print(f"\nError plotting and saving results: {str(e)}")
 
     return model, history
 

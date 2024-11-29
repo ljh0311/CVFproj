@@ -1,5 +1,7 @@
 import os
 import torch
+from flask import Blueprint
+from .predict import main, get_models
 
 class Config:
     """Configuration parameters for the training pipeline."""
@@ -24,4 +26,23 @@ class Config:
 
     # Normalization parameters
     NORMALIZE_MEAN = [0.485, 0.456, 0.406]
-    NORMALIZE_STD = [0.229, 0.224, 0.225] 
+    NORMALIZE_STD = [0.229, 0.224, 0.225]
+
+    UPLOAD_FOLDER = 'temp/uploads'
+
+    SECRET_KEY = 'your_secret_key'
+    DEBUG = True
+
+    @staticmethod
+    def init_app(app):
+        predict_bp = Blueprint('predict', __name__)
+
+        @predict_bp.route('/predict', methods=['POST'])
+        def predict():
+            return main()
+
+        @predict_bp.route('/models', methods=['GET'])
+        def available_models():
+            return get_models()
+
+        app.register_blueprint(predict_bp)

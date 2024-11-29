@@ -1,7 +1,12 @@
-# Ignore all files in the specified train directory
+# Ignore all files in the specified directories
 /data/*
+/models/*
+/checkpoints/*
 
 # Python cache files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Model files
+*.pth

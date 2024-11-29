@@ -1,38 +1,181 @@
 import torch
+import torch.nn as nn
 from PIL import Image
-from app.config import Config
-from app.data.transforms import DataTransforms
-from app.models.model import ModelBuilder
+from torchvision import transforms, models
+import os
+from flask import request, jsonify
+from werkzeug.utils import secure_filename
+import glob
+from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
+from app.models.model import ModelBuilder  # Import ModelBuilder
+from app.constants import MODEL_DIR, UPLOAD_FOLDER
+
+# Define constants
+MODEL_DIR = r"C:\Users\user\Documents\SITstuffs\CompVis\CVFproj\models"
+UPLOAD_FOLDER = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "temp", "uploads"
+)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Add default CLASS_NAMES at the top of the file
+DEFAULT_CLASS_NAMES = {
+    0: ("Apple", "Apple Scab"),
+    1: ("Apple", "Black Rot"), 
+    2: ("Apple", "Cedar Apple Rust"),
+    3: ("Apple", "Healthy"),
+    4: ("Cherry", "Powdery Mildew"),
+    5: ("Cherry", "Healthy"),
+    6: ("Corn", "Cercospora Leaf Spot"),
+    7: ("Corn", "Common Rust"),
+    8: ("Corn", "Northern Leaf Blight"),
+    9: ("Corn", "Healthy"),
+    10: ("Grape", "Black Rot"),
+    11: ("Grape", "Esca"),
+    12: ("Grape", "Leaf Blight"),
+    13: ("Grape", "Healthy"),
+    14: ("Peach", "Bacterial Spot"),
+    15: ("Peach", "Healthy")
+}
+
+def load_class_names():
+    """Load class names from file."""
+    class_names_path = os.path.join(MODEL_DIR, "class_names.txt")
+    if os.path.exists(class_names_path):
+        class_names = {}
+        with open(class_names_path, 'r') as f:
+            for line in f:
+                idx, name = line.strip().split(':')
+                plant, condition = name.split('___') if '___' in name else (name, name)
+                class_names[int(idx)] = (plant.replace('_', ' '), condition.replace('_', ' '))
+        return class_names
+    return DEFAULT_CLASS_NAMES  # Fallback to default classes
+
+# Now define CLASS_NAMES
+CLASS_NAMES = load_class_names()
+
+
+def get_available_models():
+    """Get list of available model files."""
+    if not os.path.exists(MODEL_DIR):
+        print(f"Model directory not found: {MODEL_DIR}")
+        return []
+        
+    model_files = glob.glob(os.path.join(MODEL_DIR, "*.pth"))
+    print(f"Found model files: {model_files}")  # Debug print
+    return [os.path.basename(f) for f in model_files]
+
 
 class Predictor:
-    def __init__(self, model_path, num_classes):
-        self.device = Config.DEVICE
-        self.model = ModelBuilder.create_model(num_classes)
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
-        self.model.eval()
-        _, self.transform = DataTransforms.get_transforms()
+    def __init__(self, model_path, model_type):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model_path = model_path
+        self.model_type = model_type
+        self.model = self._load_model()
+        
+    def _load_model(self):
+        if self.model_type == "resnet50":
+            model = models.resnet50(weights=None)
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(num_ftrs, len(CLASS_NAMES))
+        elif self.model_type == "efficientnet":
+            model = efficientnet_b0(weights=None)
+            num_ftrs = model.classifier[1].in_features
+            model.classifier = nn.Sequential(
+                nn.Dropout(p=0.3),
+                nn.Linear(num_ftrs, len(CLASS_NAMES))
+            )
+        else:
+            raise ValueError(f"Unsupported model type: {self.model_type}")
+            
+        model.load_state_dict(torch.load(self.model_path, map_location=self.device))
+        model = model.to(self.device)
+        model.eval()
+        return model
 
     def predict(self, image_path):
-        """Make a prediction on a single image."""
-        image = Image.open(image_path).convert('RGB')
-        image = self.transform(image).unsqueeze(0).to(self.device)
-        
-        with torch.no_grad():
-            outputs = self.model(image)
-            probabilities = torch.nn.functional.softmax(outputs, dim=1)
-            confidence, predicted = torch.max(probabilities, 1)
-            
-        return predicted.item(), confidence.item()
+        try:
+            image = Image.open(image_path).convert("RGB")
+            image = self.transform(image).unsqueeze(0).to(self.device)
+
+            with torch.no_grad():
+                outputs = self.model(image)
+                probabilities = torch.nn.functional.softmax(outputs, dim=1)
+                confidence, predicted = torch.max(probabilities, 1)
+
+            return predicted.item(), confidence.item()
+
+        except Exception as e:
+            print(f"Error during prediction: {str(e)}")
+            raise
+
 
 def main():
     """Main prediction function."""
-    predictor = Predictor(Config.MODEL_SAVE_PATH, num_classes=38)  # Update num_classes as needed
-    
-    # Example usage
-    image_path = "path/to/your/test/image.jpg"
-    predicted_class, confidence = predictor.predict(image_path)
-    print(f"Predicted class: {predicted_class}")
-    print(f"Confidence: {confidence*100:.2f}%")
+    try:
+        available_models = get_available_models()
+        if not available_models:
+            return jsonify({"error": "No models available"}), 500
+
+        selected_model = request.form.get("model")
+        if not selected_model:
+            selected_model = available_models[-1]
+        elif selected_model not in available_models:
+            return jsonify({"error": "Invalid model selected"}), 400
+
+        # Determine model type
+        model_type = "efficientnet" if "efficientnet" in selected_model.lower() else "resnet18"
+        print(f"Selected model: {selected_model} (Type: {model_type})")
+
+        if "image" not in request.files:
+            return jsonify({"error": "No image file uploaded"}), 400
+
+        file = request.files["image"]
+
+        if file.filename == "":
+            return jsonify({"error": "No file selected"}), 400
+
+        allowed_extensions = {"png", "jpg", "jpeg"}
+        if not file.filename.lower().endswith(tuple(allowed_extensions)):
+            return (
+                jsonify(
+                    {"error": "Invalid file type. Only PNG, JPG, and JPEG are allowed"}
+                ),
+                400,
+            )
+
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(temp_path)
+
+        predictor = Predictor(model_path=os.path.join(MODEL_DIR, selected_model), model_type=model_type)
+        predicted_class, confidence = predictor.predict(temp_path)
+
+        os.remove(temp_path)
+
+        return jsonify({
+            "class": int(predicted_class),
+            "class_name": CLASS_NAMES.get(predicted_class, "Unknown"),
+            "confidence": float(confidence),
+            "model_used": selected_model,
+            "model_type": model_type,
+            "available_models": available_models,
+        })
+
+    except Exception as e:
+        print(f"Error in main: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+def get_models():
+    """Return list of available models."""
+    try:
+        models = get_available_models()
+        return jsonify(
+            {"models": models, "default_model": models[-1] if models else None}
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     main()

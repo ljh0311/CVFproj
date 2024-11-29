@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 from torchvision import models
+from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 from tqdm import tqdm
 import os
 
-from app.config import Config
+from app.constants import CHECKPOINT_PATH, BEST_MODEL_PATH
 
 
 class ModelBuilder:
@@ -19,21 +20,26 @@ class ModelBuilder:
         return model
 
     @staticmethod
-    def create_model(num_classes, pretrained=True, model_type="standard"):
-        """Create and initialize the model."""
-        if model_type == "standard":
-            model = models.resnet50(pretrained=pretrained)
-        elif model_type == "fast":
-            model = models.mobilenet_v3_small(pretrained=pretrained)
+    def create_model(num_classes, model_type="resnet50"):
+        if model_type == "resnet50":
+            model = models.resnet50(weights=None)
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(num_ftrs, num_classes)
         
-        # Modify the final layer for our number of classes
-        if model_type == "standard":
-            num_features = model.fc.in_features
-            model.fc = nn.Linear(num_features, num_classes)
+        elif model_type == "efficientnet":
+            # EfficientNet implementation
+            model = efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
+            for param in list(model.parameters())[:-20]:
+                param.requires_grad = False
+            num_ftrs = model.classifier[1].in_features
+            model.classifier = nn.Sequential(
+                nn.Dropout(p=0.3),
+                nn.Linear(num_ftrs, num_classes)
+            )
+        
         else:
-            num_features = model.classifier[-1].in_features
-            model.classifier[-1] = nn.Linear(num_features, num_classes)
-
+            raise ValueError(f"Unsupported model type: {model_type}")
+            
         return model
 
 
@@ -59,18 +65,18 @@ class Trainer:
         }
         
         # Save regular checkpoint
-        torch.save(checkpoint, Config.CHECKPOINT_PATH)
+        torch.save(checkpoint, CHECKPOINT_PATH)
         
         # If this is the best model, save a copy
         if is_best:
-            torch.save(self.model.state_dict(), Config.BEST_MODEL_PATH)
+            torch.save(self.model.state_dict(), BEST_MODEL_PATH)
     
     def load_checkpoint(self, optimizer=None, scheduler=None):
         """Load a training checkpoint."""
-        if not os.path.exists(Config.CHECKPOINT_PATH):
+        if not os.path.exists(CHECKPOINT_PATH):
             return None
             
-        checkpoint = torch.load(Config.CHECKPOINT_PATH)
+        checkpoint = torch.load(CHECKPOINT_PATH)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.best_val_loss = checkpoint['best_val_loss']
         
@@ -171,6 +177,9 @@ class Trainer:
             if is_best:
                 self.best_val_loss = val_loss
             
+            # Add this before saving checkpoints
+            os.makedirs('checkpoints', exist_ok=True)
+            
             self.save_checkpoint(
                 epoch=epoch,
                 optimizer=optimizer,
@@ -198,10 +207,34 @@ class Trainer:
         total = 0
         criterion = nn.CrossEntropyLoss()
 
+        # Create progress bar for evaluation
+        eval_pbar = tqdm(dataloader, desc='Evaluation', 
+                        leave=True, 
+                        unit='batch')
+
         with torch.no_grad():
-            for inputs, labels in dataloader:
+            for inputs, labels in eval_pbar:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
 
                 outputs = self.model(inputs)
                 loss = criterion(outputs, labels)
-                running_loss += loss
+                running_loss += loss.item()
+
+                _, predicted = outputs.max(1)
+                total += labels.size(0)
+                correct += predicted.eq(labels).sum().item()
+
+                # Update progress bar with current loss and accuracy
+                current_acc = 100. * correct / total
+                eval_pbar.set_postfix({
+                    'loss': f'{loss.item():.4f}',
+                    'acc': f'{current_acc:.2f}%'
+                })
+
+        # Calculate final metrics
+        avg_loss = running_loss / len(dataloader)
+        print("Correct file count", correct)
+        print("Total file count", total)
+        accuracy = (correct / total) * 100
+
+        return avg_loss, accuracy

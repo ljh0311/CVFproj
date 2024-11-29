@@ -7,7 +7,7 @@ from torchvision import datasets, transforms, models
 from PIL import Image
 import os
 import matplotlib.pyplot as plt
-from imgProcess import DatasetManager
+from utils.dataset_manager import DatasetManager
 
 
 # Configuration
@@ -149,24 +149,8 @@ class ModelBuilder:
     """Handles model creation and initialization."""
     @staticmethod
     def create_model(num_classes):
-        model = models.resnet50(pretrained=True)
-        
-        # Freeze early layers
-        for param in model.parameters():
-            param.requires_grad = False
-        
-        # Unfreeze final layer for fine-tuning
-        for param in model.layer4.parameters():
-            param.requires_grad = True
-        
-        # Modify final layer
-        model.fc = nn.Sequential(
-            nn.Linear(model.fc.in_features, 512),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(512, num_classes),
-        )
-        
+        model = models.resnet18()
+        model.fc = nn.Linear(512, num_classes)
         return model
 
 
