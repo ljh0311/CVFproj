@@ -29,6 +29,10 @@ The core of this project is a **classification model** used to predict the healt
   + Models can be selected through the web interface for different use cases:
     - ResNet-50 for higher accuracy on complex disease patterns
     - EfficientNet-B0 for faster inference and mobile deployment
+    - Configurable training parameters:
+      * Number of epochs for training iterations
+      * Learning rate for optimization control 
+      * Batch size for memory and performance tuning
   + Future work includes:
     - Developing a custom CNN architecture specifically optimized for Singapore's native plant species
     - Ensemble methods combining predictions from both models
@@ -40,25 +44,51 @@ The core of this project is a **classification model** used to predict the healt
 
 ## Deployment
 
-The model will be deployed as a **web application** to provide an easy-to-use interface for users.
+The project offers two interfaces for users:
 
-* **Web App Functionality**:
-  + Users can upload images of plant leaves through the web interface.
-  + Upon uploading, the web app will process the image and return the predicted disease label and confidence score.
-  
-* **Technologies Used**:
-  + Flask for creating the web application.
-  + PyTorch for building and deploying the deep learning model.
-  + OpenCV and PIL for image processing.
+### 1. Desktop GUI Application
 
-## Flow Diagram
+A Tkinter-based GUI application that provides comprehensive model training and dataset management capabilities:
 
-The workflow of the application can be summarized as follows:
+* **Dataset Management**:
+  + Setup and organize both plant disease and landscape datasets
+  + Extract and merge datasets automatically
+  + Visual progress indicators for dataset operations
+  + Dataset verification and status updates
 
-1. **User uploads image** of a plant leaf through the web interface.
-2. **Web server processes the image**, resizing and preparing it for prediction.
-3. **Model predicts the class** (diseased or healthy) and the specific disease (if applicable).
-4. **Results are displayed** to the user, including the disease label and the confidence score.
+* **Model Configuration**:
+  + Choose between training new models or evaluating existing ones
+  + Select model architecture (ResNet-50 or EfficientNet-B0)
+  + Configure training parameters (epochs, learning rate, batch size)
+  + Real-time training progress visualization
+  + Training logs and status updates
+
+* **Model Evaluation**:
+  + Evaluate trained models on test datasets
+  + View confusion matrices and classification reports
+  + Performance metrics visualization
+
+### 2. Web Interface
+
+A Flask-based web application for easy disease prediction:
+
+* **Prediction Interface**:
+  + Upload plant leaf images for disease detection
+  + Select between available trained models
+  + View prediction results with confidence scores
+  + Support for multiple image formats (JPG, JPEG, PNG)
+
+* **Data Contribution**:
+  + Contribute to the training dataset
+  + Upload multiple images simultaneously (up to 10)
+  + Select appropriate disease labels
+  + Guidelines for proper image submission
+
+* **User Features**:
+  + View available disease classes
+  + Access project information and documentation
+  + Dynamic background image rotation
+  + Responsive design for various screen sizes
 
 ## Setup Instructions
 
@@ -87,50 +117,40 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. **Download the datasets**:
+4. **Download and setup datasets**:
+   * Use the GUI application for dataset setup:
+     ```bash
+     python -m app.train_gui
+     ```
+   * Click "Setup Datasets" and select the downloaded ZIP files when prompted
+   * The GUI will automatically:
+     - Extract both datasets
+     - Merge them into the correct structure
+     - Verify the setup
 
-```bash
-# Method 1: Using kaggle CLI (recommended)
-kaggle datasets download vipoooool/new-plant-diseases-dataset
-kaggle datasets download arnaud58/landscape-pictures
+5. **Train the model** (Required step):
+   * Using the GUI:
+     - Select "Train New Model"
+     - Configure training parameters
+     - Click "Start Training"
+   * Or using command line:
+     ```bash
+     python train.py
+     ```
 
-# Method 2: Using curl
-curl -L -o leafachive.zip https://www.kaggle.com/api/v1/datasets/download/vipoooool/new-plant-diseases-dataset
-curl -L -o landscapePhotos.zip https://www.kaggle.com/api/v1/datasets/download/arnaud58/landscape-pictures
-
-```
-
-5. **Extract the datasets**:
-* Extract both downloaded datasets into the `data` directory in the project root
-* Ensure the directory structure matches:
-  
-
-```
-  CVFProj/
-  ├── data/
-  │   ├── New Plant Diseases Dataset/
-  │   └── PlantVillage/
-  ```
-
-6. **Train the model** (Required step):
-```bash
-python train.py
-```
-This step will:
-- Create necessary model files (.pth) in the `models` directory
-- Generate checkpoints in the `checkpoints` directory
-- Train the model on your dataset
-- Save class names and model configurations
-
-7. **Run the Flask Web App**:
-
-```bash
-python app.py
-```
-
-8. Open the web interface at http://127.0.0.1:5000 to upload images and view predictions.
+6. **Launch the application**:
+   * For GUI:
+     ```bash
+     python -m app.train_gui
+     ```
+   * For web interface:
+     ```bash
+     python app.py
+     ```
+   * Access web interface at http://127.0.0.1:5000
 
 **Note**: 
-- Make sure you have Python 3.8+ installed on your system before starting
-- The training step (6) is required as model files are not included in the repository due to size limitations
-- Training time will vary depending on your hardware configuration
+- Python 3.8+ required
+- Training step is mandatory as model files are not included
+- GPU recommended for faster training
+- Web interface requires trained models in the `models` directory

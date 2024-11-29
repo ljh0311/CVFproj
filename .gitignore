@@ -10,3 +10,4 @@ __pycache__/
 
 # Model files
 *.pth
+app/__pycache__/*
