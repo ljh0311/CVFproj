@@ -16,27 +16,11 @@ class DatasetManager:
         print("\nSetting up dataset...")
         print(f"Target directory: {self.target_dir}")
 
-        # Create target directory if it doesn't exist
-        os.makedirs(self.target_dir, exist_ok=True)
+        if not os.path.exists(self.zip_path):
+            raise FileNotFoundError(f"Dataset zip file not found at: {self.zip_path}")
 
-        # Download dataset from Kaggle
-        print("Downloading dataset from Kaggle...")
-        download_path = os.path.expanduser("~/Downloads/archive.zip")
-        try:
-            os.system(
-                f"curl -L -o {download_path} "
-                "https://www.kaggle.com/api/v1/datasets/download/vipoooool/new-plant-diseases-dataset"
-            )
-        except Exception as e:
-            raise RuntimeError(f"Failed to download dataset: {str(e)}")
-
-        if not os.path.exists(download_path):
-            raise FileNotFoundError(f"Failed to download dataset to: {download_path}")
-
-        if not zipfile.is_zipfile(download_path):
-            raise ValueError(
-                f"Downloaded file is not a valid zip file: {download_path}"
-            )
+        if not zipfile.is_zipfile(self.zip_path):
+            raise ValueError(f"Provided file is not a valid zip file: {self.zip_path}")
 
         try:
             # Clean up existing directories
@@ -53,8 +37,8 @@ class DatasetManager:
             os.makedirs(dataset_path)
 
             # Extract the zip file
-            print(f"Extracting dataset from {download_path}...")
-            with zipfile.ZipFile(download_path, "r") as zip_ref:
+            print(f"Extracting dataset from {self.zip_path}...")
+            with zipfile.ZipFile(self.zip_path, "r") as zip_ref:
                 zip_ref.extractall(temp_dir)
             print("Extraction completed!")
 
@@ -81,10 +65,13 @@ class DatasetManager:
             # Clean up
             print("Cleaning up temporary files...")
             shutil.rmtree(temp_dir)
-            os.remove(download_path)
 
             # Verify the final structure
             self._verify_dataset_structure(dataset_path)
+            
+            # Rename the images
+            self.rename_images()
+            
             print("Dataset setup completed successfully!")
 
         except Exception as e:
@@ -93,8 +80,6 @@ class DatasetManager:
             for path in [temp_dir, dataset_path]:
                 if os.path.exists(path):
                     shutil.rmtree(path)
-            if os.path.exists(download_path):
-                os.remove(download_path)
             raise
 
     def _verify_dataset_structure(self, dataset_path):
@@ -142,3 +127,41 @@ class DatasetManager:
             if os.path.isdir(os.path.join(train_dir, d))
         ]
         return sorted(class_names)
+
+    def rename_images(self, dataset_name="landscapeDataset", prefix="landscape"):
+        """Rename all images in the dataset with a specified prefix and number."""
+        dataset_path = os.path.join(self.target_dir, dataset_name)
+        if not os.path.exists(dataset_path):
+            raise FileNotFoundError(f"Dataset not found at: {dataset_path}")
+
+        print(f"\nRenaming images with prefix: {prefix}_")
+        image_counter = 1
+
+        for split in ["train", "valid", "test"]:
+            split_path = os.path.join(dataset_path, split)
+            if not os.path.exists(split_path):
+                continue
+
+            for class_name in os.listdir(split_path):
+                class_path = os.path.join(split_path, class_name)
+                if not os.path.isdir(class_path):
+                    continue
+
+                print(f"Processing {split}/{class_name}...")
+                for old_name in os.listdir(class_path):
+                    if not any(old_name.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png']):
+                        continue
+
+                    # Get file extension
+                    ext = os.path.splitext(old_name)[1]
+                    
+                    # Create new name
+                    new_name = f"{prefix}_{image_counter}{ext}"
+                    old_path = os.path.join(class_path, old_name)
+                    new_path = os.path.join(class_path, new_name)
+
+                    # Rename file
+                    os.rename(old_path, new_path)
+                    image_counter += 1
+
+        print(f"Renamed {image_counter-1} images successfully!")

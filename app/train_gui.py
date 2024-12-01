@@ -1,29 +1,21 @@
+import shutil
 import sys
 import os
-
-# Add the project root directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-from app.config import Config  # Changed from app.config
-from app.train import main as train_main  # Changed from app.train
-from app.predict import DEFAULT_CLASS_NAMES
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 import torch
-from app.models.model import ModelBuilder, Trainer  # Changed from app.models.model
-from torch.utils.data import DataLoader
-from app.data.dataset import CustomImageDataset  # Changed from app.data.dataset
-from app.data.transforms import DataTransforms  # Changed from app.data.transforms
-from app.utils.visualization import plot_training_history, plot_model_performance  # Only import what's needed
 import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
-import seaborn as sns
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from app.utils.dataset_manager import DatasetManager  # Changed from app.utils.dataset_manager
-import shutil
-from tkinter import scrolledtext
+from torch.utils.data import DataLoader
+from app.config import Config
+from app.predict import DEFAULT_CLASS_NAMES
+from app.models.model import ModelBuilder
+from app.data.dataset import CustomImageDataset
+from app.data.transforms import DataTransforms
+from app.utils.visualization import plot_model_performance
+from app.train import main as train_main
+from utils.dataset_manager import DatasetManager
+
 
 
 class TrainingGUI:
@@ -384,17 +376,30 @@ class TrainingGUI:
             self.progress['value'] = 0
             self.root.update()
 
-            # Initialize model with correct number of classes
-            model = ModelBuilder(
+            # Get the number of classes from DEFAULT_CLASS_NAMES
+            num_classes = len(DEFAULT_CLASS_NAMES)
+            device = Config.DEVICE
+            
+            # Create model with correct parameters
+            model = ModelBuilder.create_model(
+                num_classes=num_classes,
                 model_type=self.model_arch_var.get(),
-                num_classes=len(DEFAULT_CLASS_NAMES)
-            ).build()
+                pretrained=False
+            ).to(device)
             
             # Load checkpoint
-            checkpoint = torch.load(self.existing_model_var.get())
-            model.load_state_dict(checkpoint['model_state_dict'])
+            model_path = os.path.join(Config.MODEL_DIR, self.existing_model_var.get())
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Model file not found: {model_path}")
+                
+            checkpoint = torch.load(model_path, map_location=device)
             
-            # Set model to evaluation mode
+            # Load state dict
+            if 'state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['state_dict'])
+            else:
+                model.load_state_dict(checkpoint)
+            
             model.eval()
             
             # Prepare test dataset
@@ -403,27 +408,40 @@ class TrainingGUI:
                 split='test',
                 transform=DataTransforms().get_test_transform()
             )
-            test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+            test_loader = DataLoader(
+                test_dataset, 
+                batch_size=32, 
+                shuffle=False,
+                num_workers=0,
+                pin_memory=True
+            )
             
-            # Initialize confusion matrix
-            conf_mat = np.zeros((len(DEFAULT_CLASS_NAMES), len(DEFAULT_CLASS_NAMES)))
+            # Initialize lists for predictions and labels
             all_preds = []
             all_labels = []
             
             # Evaluate model
+            self.status_var.set("Evaluating model...")
             with torch.no_grad():
-                for images, labels in test_loader:
+                for batch_idx, (images, labels) in enumerate(test_loader):
+                    images, labels = images.to(device), labels.to(device)
                     outputs = model(images)
                     _, predicted = torch.max(outputs.data, 1)
                     
-                    # Store predictions and labels
-                    all_preds.extend(predicted.numpy())
-                    all_labels.extend(labels.numpy())
+                    # Move to CPU for numpy conversion
+                    all_preds.extend(predicted.cpu().numpy())
+                    all_labels.extend(labels.cpu().numpy())
+                    
+                    # Update progress
+                    progress = (batch_idx + 1) / len(test_loader) * 100
+                    self.progress['value'] = progress
+                    self.root.update()
             
             # Calculate confusion matrix
             conf_mat = confusion_matrix(all_labels, all_preds)
             
             # Plot and save results
+            self.status_var.set("Generating performance plots...")
             plot_model_performance(
                 confusion_mat=conf_mat,
                 class_names=DEFAULT_CLASS_NAMES,
@@ -431,20 +449,17 @@ class TrainingGUI:
             )
             
             # Calculate and display metrics
-            report = classification_report(all_labels, all_preds, target_names=[
-                f"{plant}-{condition}" for plant, condition in DEFAULT_CLASS_NAMES.values()
-            ])
+            class_names = [f"{plant}-{condition}" for plant, condition in DEFAULT_CLASS_NAMES.values()]
+            report = classification_report(all_labels, all_preds, target_names=class_names)
             
-            # Show results in a new window
+            # Show results
             self._show_evaluation_results(report)
             
             self.status_var.set("Evaluation completed")
             self.progress['value'] = 100
             
         except Exception as e:
-            self.status_var.set("Error during evaluation")
-            messagebox.showerror("Error", str(e))
-            print(f"Error details: {str(e)}")
+            self.status_var.set(f"Error: {str(e)}")
             raise e
 
     def _show_evaluation_results(self, metrics_text):

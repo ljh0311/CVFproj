@@ -1,7 +1,6 @@
 import os
 import torch
 from flask import Blueprint
-from .predict import main, get_models
 
 class Config:
     """Configuration parameters for the training pipeline."""
@@ -32,6 +31,31 @@ class Config:
 
     SECRET_KEY = 'your_secret_key'
     DEBUG = True
+
+    # Base directories
+    MODEL_DIR = os.path.join(BASE_DIR, "models")
+    CHECKPOINT_DIR = os.path.join(BASE_DIR, "checkpoints")
+    
+    # Dataset
+    ZIP_PATH = os.path.join(BASE_DIR, "data", "archive.zip")
+    
+    # Training parameters
+    EPOCHS = 10  # Default number of epochs
+    BATCH_SIZE = 32  # Default batch size
+    LR = 0.001  # Default learning rate
+    
+    # Device configuration
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    @classmethod
+    def update_training_params(cls, epochs=None, batch_size=None, lr=None):
+        """Update training parameters with user-defined values"""
+        if epochs is not None:
+            cls.EPOCHS = epochs
+        if batch_size is not None:
+            cls.BATCH_SIZE = batch_size
+        if lr is not None:
+            cls.LR = lr
 
     @staticmethod
     def init_app(app):
