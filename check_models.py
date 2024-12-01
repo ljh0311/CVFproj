@@ -9,7 +9,7 @@ def check_models():
     
     expected_models = {
         "resnet50_model.pth": "ResNet50",
-        "plant_disease_model.pth": "EfficientNet"
+        "efficientnet_model.pth": "EfficientNet"
     }
     
     if os.path.exists(MODEL_DIR):

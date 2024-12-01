@@ -14,22 +14,46 @@ from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 from datetime import datetime
 import shutil
 import platform
-
-# Move this line to the top, before it's used
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import sys
+from app.config import Config
 
 app = Flask(__name__, static_folder='../static')
-app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'static', 'uploads')
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+app.config['UPLOAD_FOLDER'] = Config.UPLOAD_FOLDER
+
+# Ensure all required directories exist at startup
+def ensure_directories():
+    """Create all necessary directories if they don't exist."""
+    required_dirs = [
+        Config.MODEL_DIR,
+        Config.DATA_DIR,
+        Config.STATIC_DIR,
+        Config.CHECKPOINT_DIR,
+        Config.UPLOAD_FOLDER,
+        Config.PLOTS_FOLDER,
+        Config.DATASET_DIR,
+        Config.TRAIN_DIR,
+        Config.TEST_DIR,
+        Config.VAL_DIR
+    ]
+    
+    for directory in required_dirs:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            print(f"Created directory: {directory}")
+        else:
+            print(f"Directory exists: {directory}")
+
+# Create directories at startup
+ensure_directories()
 
 # Initialize models dictionary with absolute paths
 models = {
     "ResNet50": {
-        "path": os.path.join(BASE_DIR, "models", "resnet50_model.pth"),
+        "path": Config.RESNET_MODEL_PATH,
         "type": "resnet50",
     },
     "EfficientNet": {
-        "path": os.path.join(BASE_DIR, "models", "efficientnet_model.pth"),
+        "path": Config.EFFICIENTNET_MODEL_PATH,
         "type": "efficientnet",
     },
 }
@@ -144,33 +168,28 @@ model_manager = ModelManager()
 
 def get_random_image_path():
     """Get a random image path from the dataset."""
-    dataset_path = os.path.join(BASE_DIR, "data", "plantDataset", "train")
+    if not os.path.exists(Config.TRAIN_DIR):
+        return None
 
-    # Get all subdirectories (disease categories)
     categories = [
-        d
-        for d in os.listdir(dataset_path)
-        if os.path.isdir(os.path.join(dataset_path, d))
+        d for d in os.listdir(Config.TRAIN_DIR)
+        if os.path.isdir(os.path.join(Config.TRAIN_DIR, d))
     ]
 
     if not categories:
         return None
 
-    # Select random category
     category = random.choice(categories)
-    category_path = os.path.join(dataset_path, category)
+    category_path = os.path.join(Config.TRAIN_DIR, category)
 
-    # Get all images in the category
     images = [
-        f
-        for f in os.listdir(category_path)
+        f for f in os.listdir(category_path)
         if f.lower().endswith((".png", ".jpg", ".jpeg"))
     ]
 
     if not images:
         return None
 
-    # Select random image
     image = random.choice(images)
     return os.path.join(category_path, image)
 
@@ -178,7 +197,7 @@ def get_random_image_path():
 @app.route("/")
 @app.route("/index")
 def home():
-    models_dir = os.path.join(BASE_DIR, "models")
+    models_dir = Config.MODEL_DIR
     if not os.path.exists(models_dir):
         os.makedirs(models_dir)
     
@@ -202,7 +221,7 @@ def home():
     # Get initial random background
     image_path = get_random_image_path()
     if image_path:
-        background_url = f'/serve_image/{os.path.relpath(image_path, BASE_DIR).replace(os.sep, "_")}'
+        background_url = f'/serve_image/{os.path.relpath(image_path, Config.BASE_DIR).replace(os.sep, "_")}'
         template_data['background_url'] = background_url
 
     return render_template('index.html', **template_data)
@@ -223,21 +242,21 @@ def predict():
     try:
         model_name = request.form.get('model')
         if not model_name:
-            return render_template('prediction_result.html', error='No model selected')
+            return jsonify({'error': 'No model selected'}), 400
             
         model_info = models.get(model_name)
         if not model_info:
-            return render_template('prediction_result.html', error='Invalid model selected')
+            return jsonify({'error': 'Invalid model selected'}), 400
             
         # Load the model using ModelManager
         model_manager.load_model(model_name)
 
         if 'file' not in request.files:
-            return render_template('prediction_result.html', error='No file uploaded')
+            return jsonify({'error': 'No file uploaded'}), 400
         
         file = request.files['file']
         if file.filename == '':
-            return render_template('prediction_result.html', error='No file selected')
+            return jsonify({'error': 'No file selected'}), 400
 
         # Secure the filename and save the file
         filename = secure_filename(file.filename)
@@ -256,14 +275,16 @@ def predict():
         # Use ModelManager's predict method
         prediction = model_manager.predict(file_contents)
         
-        return render_template('prediction_result.html', 
-                             class_name=prediction['label'],
-                             confidence=prediction['confidence'],
-                             image_name=filename,
-                             model_used=model_name)
+        return jsonify({
+            'success': True,
+            'class_name': prediction['label'],
+            'confidence': prediction['confidence'],
+            'image_name': filename,
+            'model_used': model_name
+        })
 
     except Exception as e:
-        return render_template('prediction_result.html', error=str(e))
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route("/predict_batch", methods=['POST'])
@@ -307,7 +328,7 @@ def get_random_background():
         return jsonify({"error": "No images found"}), 404
 
     # Convert the file path to a URL
-    relative_path = os.path.relpath(image_path, BASE_DIR)
+    relative_path = os.path.relpath(image_path, Config.BASE_DIR)
     background_url = f'/serve_image/{relative_path.replace(os.sep, "_")}'
     return jsonify({"background_url": background_url})
 
@@ -316,7 +337,7 @@ def get_random_background():
 def serve_image(filename):
     """Serve the image file."""
     # Convert URL-safe path back to system path
-    real_path = os.path.join(BASE_DIR, *filename.split("_"))
+    real_path = os.path.join(Config.BASE_DIR, *filename.split("_"))
     return send_file(real_path)
 
 
@@ -330,17 +351,17 @@ def contribute():
     try:
         disease_label = request.form.get('disease_label')
         if not disease_label:
-            return render_template('index.html', error='Please select a disease label')
+            return jsonify({'error': 'Please select a disease label'}), 400
 
         if 'training_images' not in request.files:
-            return render_template('index.html', error='No files uploaded')
+            return jsonify({'error': 'No files uploaded'}), 400
 
         files = request.files.getlist('training_images')
         if not files or files[0].filename == '':
-            return render_template('index.html', error='No files selected')
+            return jsonify({'error': 'No files selected'}), 400
 
         # Define the dataset path
-        dataset_path = os.path.join(BASE_DIR, "data", "plantDataset", "train", disease_label)
+        dataset_path = os.path.join(Config.TRAIN_DIR, disease_label)
         os.makedirs(dataset_path, exist_ok=True)
 
         saved_files = []
@@ -356,78 +377,79 @@ def contribute():
                 file.save(file_path)
                 saved_files.append(new_filename)
 
-        success_message = f"Successfully contributed {len(saved_files)} images to the {disease_label} dataset"
-        return render_template('index.html', success=success_message)
+        return jsonify({
+            'success': True,
+            'message': f"Successfully contributed {len(saved_files)} images to the {disease_label} dataset"
+        })
 
     except Exception as e:
-        return render_template('index.html', error=f'Error contributing images: {str(e)}')
+        return jsonify({'error': f'Error contributing images: {str(e)}'}), 500
 
 
 @app.route("/debug")
 def debug():
-    """Debug page showing detailed system information."""
     try:
-        models_dir = os.path.join(BASE_DIR, "models")
-        plots_dir = os.path.join(BASE_DIR, "static", "plots")
-        
-        if not os.path.exists(models_dir):
-            os.makedirs(models_dir)
-            
-        # Get all training plot files
-        plot_files = {}
-        if os.path.exists(plots_dir):
-            for model_name in ["ResNet50", "EfficientNet"]:
-                model_plots = [f for f in os.listdir(plots_dir) 
-                             if f.startswith(f'training_loss_{model_name.lower()}')]
-                if model_plots:
-                    # Get the most recent plot
-                    latest_plot = sorted(model_plots)[-1]
-                    plot_files[model_name] = url_for('static', 
-                                                    filename=f'plots/{latest_plot}')
-        
-        # Check model files and their status
-        model_status = {}
-        for name, info in models.items():
-            exists = os.path.exists(info["path"])
-            model_status[name] = {
-                "path": info["path"],
-                "type": info["type"],
-                "exists": exists,
-                "plot": plot_files.get(name, None)
-            }
-        
-        template_data = {
-            'model_names': list(models.keys()),
-            'total_models': len([m for m in model_status.values() if m["exists"]]),
-            'model_dir': models_dir,
-            'models': model_status,
-            'error': None if any(m["exists"] for m in model_status.values()) 
-                    else "No trained models found in models directory",
-            'python_version': platform.python_version(),
-            'torch_version': torch.__version__,
-            'cuda_available': torch.cuda.is_available(),
-            'device': str(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+        # Initialize verification results
+        verify_results = {
+            'base_dir': Config.BASE_DIR,
+            'model_dir': Config.MODEL_DIR,
+            'directories_exist': False
+        }
+
+        # Check if critical directories exist
+        critical_dirs = {
+            'BASE_DIR': Config.BASE_DIR,
+            'MODEL_DIR': Config.MODEL_DIR,
+            'DATA_DIR': Config.DATA_DIR,
+            'STATIC_DIR': Config.STATIC_DIR,
+            'CHECKPOINT_DIR': Config.CHECKPOINT_DIR
         }
         
-        return render_template('debug.html', **template_data)
+        existing_dirs = {name: os.path.exists(path) for name, path in critical_dirs.items()}
+        verify_results['directories_exist'] = all(existing_dirs.values())
+
+        # Get model files status
+        model_files = {
+            'best_model.pth': Config.BEST_MODEL_PATH,
+            'efficientnet_model.pth': Config.EFFICIENTNET_MODEL_PATH,
+            'resnet50_model.pth': Config.RESNET_MODEL_PATH
+        }
         
+        models_status = {}
+        for name, path in model_files.items():
+            models_status[name] = {
+                'exists': os.path.exists(path),
+                'path': path,
+                'size': f"{os.path.getsize(path) / (1024*1024):.2f} MB" if os.path.exists(path) else "N/A"
+            }
+
+        # Get available models count and names
+        available_models = [name for name, info in models_status.items() if info['exists']]
+        total_models = len(available_models)
+        model_names = available_models if available_models else None
+
+        # Debug prints
+        print(f"BASE_DIR exists: {os.path.exists(Config.BASE_DIR)} - {Config.BASE_DIR}")
+        print(f"MODEL_DIR exists: {os.path.exists(Config.MODEL_DIR)} - {Config.MODEL_DIR}")
+        if os.path.exists(Config.MODEL_DIR):
+            print(f"Models found: {os.listdir(Config.MODEL_DIR)}")
+
+        return render_template('debug.html',
+                             verify_results=verify_results,
+                             models=models_status,
+                             total_models=total_models,
+                             model_names=model_names,
+                             model_dir=Config.MODEL_DIR,
+                             error=None if verify_results['directories_exist'] else "Required directories are missing")
+
     except Exception as e:
-        print(f"Error in debug route: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return render_template(
-            'debug.html',
-            error=str(e),
-            model_names=[],
-            models={},
-            model_dir=models_dir,
-            total_models=0
-        )
+        print(f"Debug route error: {str(e)}")  # Console logging
+        return render_template('debug.html', error=str(e))
 
 
 if __name__ == "__main__":
-    # Create necessary directories if they don't exist
-    os.makedirs(os.path.join(BASE_DIR, "models"), exist_ok=True)
+    # Create all necessary directories
+    ensure_directories()
     
     # Check if model files exist
     for model_name, model_info in models.items():

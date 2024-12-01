@@ -54,12 +54,53 @@ class Trainer:
     def __init__(self, model, device):
         self.model = model
         self.device = device
-        self.criterion = nn.CrossEntropyLoss()
+        self.model_save_path = None
+        self.checkpoint_path = None
+        self.best_val_loss = float("inf")
+        os.makedirs('checkpoints', exist_ok=True)
 
-    def train_model(self, train_loader, val_loader, num_epochs=10, lr=0.001, progress_callback=None):
-        """
-        Train the model with optional progress callback
-        """
+    def save_checkpoint(self, epoch, optimizer, scheduler, train_losses, val_losses, val_accuracies, is_best=False):
+        """Save training checkpoint and optionally save as best model."""
+        # Create checkpoints directory if it doesn't exist
+        os.makedirs(os.path.dirname(CHECKPOINT_PATH), exist_ok=True)
+        
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'train_losses': train_losses,
+            'val_losses': val_losses,
+            'val_accuracies': val_accuracies,
+            'best_val_loss': self.best_val_loss
+        }
+        
+        torch.save(checkpoint, CHECKPOINT_PATH)
+        
+        if is_best:
+            torch.save(self.model.state_dict(), BEST_MODEL_PATH)
+    
+    def load_checkpoint(self, optimizer=None, scheduler=None):
+        """Load a training checkpoint."""
+        if not os.path.exists(CHECKPOINT_PATH):
+            return None
+            
+        checkpoint = torch.load(CHECKPOINT_PATH)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.best_val_loss = checkpoint['best_val_loss']
+        
+        if optimizer:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if scheduler:
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            
+        return checkpoint
+
+    def train_model(
+        self, train_loader, val_loader, num_epochs=10, lr=0.001, fine_tune_layers=None
+    ):
+        """Train the model."""
+        criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
         train_losses = []
         val_losses = []
@@ -100,29 +141,36 @@ class Trainer:
             val_losses.append(val_loss)
             val_accuracies.append(val_acc)
 
-            # Call progress callback with validation results
-            if progress_callback:
-                progress_callback(
-                    epoch=epoch + 1,
-                    total_epochs=num_epochs,
-                    val_loss=val_loss,
-                    val_acc=val_acc
-                )
+            # Learning rate scheduling
+            scheduler.step(val_loss)
 
-            # Save checkpoint if validation accuracy improves
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
-                try:
-                    checkpoint = {
-                        'epoch': epoch,
-                        'state_dict': self.model.state_dict(),
-                        'optimizer': optimizer.state_dict(),
-                        'val_acc': val_acc,
-                        'version': get_next_version(self.model.__class__.__name__)
-                    }
-                    torch.save(checkpoint, os.path.join(Config.CHECKPOINT_DIR, 'last_checkpoint.pth'))
-                except Exception as e:
-                    print(f"Warning: Could not save checkpoint: {str(e)}")
+            # Save checkpoint after each epoch
+            is_best = val_loss < self.best_val_loss
+            if is_best:
+                self.best_val_loss = val_loss
+            
+            # Add this before saving checkpoints
+            os.makedirs('checkpoints', exist_ok=True)
+            
+            self.save_checkpoint(
+                epoch=epoch,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                train_losses=train_losses,
+                val_losses=val_losses,
+                val_accuracies=val_accuracies,
+                is_best=is_best
+            )
+
+            # Print epoch summary
+            print(f"\nEpoch Summary:")
+            print(f"Training Loss: {epoch_loss:.4f}")
+            print(f"Validation Loss: {val_loss:.4f}")
+            print(f"Validation Accuracy: {val_acc*100:.2f}%")
+            print("-" * 60)
+
+        # Save final model
+        self.save_model()
 
         return train_losses, val_losses, val_accuracies
 
@@ -149,3 +197,9 @@ class Trainer:
         avg_loss = running_loss / len(loader)
         accuracy = 100 * correct / total
         return avg_loss, accuracy
+
+    def save_model(self):
+        """Save the final model."""
+        if self.model_save_path:
+            torch.save(self.model.state_dict(), self.model_save_path)
+            print(f"Model saved to: {self.model_save_path}")

@@ -2,6 +2,22 @@
 
 **Plantastic** is a deep learning-based project that aims to identify plant diseases by analyzing images of plant leaves. The project uses computer vision and deep learning techniques to classify images into healthy or diseased categories and further classify the disease type.
 
+## Version Control
+
+This repository maintains two main branches:
+
+1. **main**: Production-ready code
+   * Contains only fully functional and tested code
+   * Each push is versioned as "Version X.X"
+   * All features must be thoroughly tested before merging
+
+2. **fileFix**: Stable Backup branch
+   * Contains only tested and working code changes
+   * Serves as a stable backup point for the codebase
+   * Updated only after changes are verified to be functional
+
+**Note**: Contributors should only push to main when code is fully functional and tested.
+
 ## Data Source
 
 The project uses two datasets:
@@ -118,15 +134,28 @@ pip install -r requirements.txt
 ```
 
 4. **Download and setup datasets**:
+   * Rename the downloaded zip files:
+     - Plant disease dataset → `leafarchive.zip`
+     - Landscape dataset → `landscapePhotos.zip`
+   * Place both zip files in the `data` directory
+   
    * Use the GUI application for dataset setup:
      ```bash
      python -m app.train_gui
      ```
-   * Click "Setup Datasets" and select the downloaded ZIP files when prompted
-   * The GUI will automatically:
-     - Extract both datasets
-     - Merge them into the correct structure
-     - Verify the setup
+   * For automatic setup:
+     - Click "Setup Datasets" and select the downloaded ZIP files when prompted
+     - The GUI will handle extraction and verification automatically
+   
+   * For manual setup:
+     - Extract plantDataset.zip which should contain:
+       + test/
+       + train/ 
+       + valid/
+     - Extract landscapeDataset.zip directly into a folder
+       + Should contain only image files (.jpg, .jpeg, .png)
+       + No subfolders needed
+     - Verify folder structure is correct before proceeding
 
 5. **Train the model** (Required step):
    * Using the GUI:

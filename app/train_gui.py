@@ -2,7 +2,10 @@ import shutil
 import sys
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+from tkinter import ttk, messagebox, filedialog
+from app.config import Config  # Changed from app.config
+from app.train import main as train_main, get_next_version  # Changed from app.train
+from app.predict import DEFAULT_CLASS_NAMES
 import torch
 import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report
@@ -321,6 +324,9 @@ class TrainingGUI:
                 messagebox.showerror("Error", "Please enter valid positive numbers for all parameters")
                 return
             
+            # Generate model name with parameters
+            model_name = f"{model_arch}_{epochs}_{lr}_{batch_size}"
+            
             self.status_var.set("Training model...")
             self.progress['value'] = 0
             self.root.update()
@@ -347,12 +353,13 @@ class TrainingGUI:
                 
                 self.root.update()
             
-            # Start training with progress callback
+            # Start training with progress callback and model name
             train_main(
                 epochs=epochs, 
                 lr=lr, 
                 batch_size=batch_size, 
                 model_type=model_arch,
+                model_name=model_name,
                 progress_callback=progress_callback
             )
             
@@ -376,30 +383,27 @@ class TrainingGUI:
             self.progress['value'] = 0
             self.root.update()
 
-            # Get the number of classes from DEFAULT_CLASS_NAMES
-            num_classes = len(DEFAULT_CLASS_NAMES)
-            device = Config.DEVICE
-            
-            # Create model with correct parameters
+            # Initialize model with correct number of classes
             model = ModelBuilder.create_model(
-                num_classes=num_classes,
-                model_type=self.model_arch_var.get(),
-                pretrained=False
-            ).to(device)
+                num_classes=len(DEFAULT_CLASS_NAMES),
+                model_type=self.model_arch_var.get()
+            )
             
-            # Load checkpoint
+            # Load checkpoint with weights_only=True and handle different model file formats
             model_path = os.path.join(Config.MODEL_DIR, self.existing_model_var.get())
-            if not os.path.exists(model_path):
-                raise FileNotFoundError(f"Model file not found: {model_path}")
-                
-            checkpoint = torch.load(model_path, map_location=device)
+            try:
+                # Try loading as a state dict first
+                checkpoint = torch.load(model_path, map_location=Config.DEVICE, weights_only=True)
+                if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+                    model.load_state_dict(checkpoint['state_dict'])
+                else:
+                    # If it's just the state dict directly
+                    model.load_state_dict(checkpoint)
+            except Exception as e:
+                self.update_log(f"Error loading model: {str(e)}")
+                raise
             
-            # Load state dict
-            if 'state_dict' in checkpoint:
-                model.load_state_dict(checkpoint['state_dict'])
-            else:
-                model.load_state_dict(checkpoint)
-            
+            # Set model to evaluation mode
             model.eval()
             
             # Prepare test dataset
@@ -483,44 +487,19 @@ class TrainingGUI:
             self.progress['value'] = 0
             self.root.update()
 
-            # Ask user for plant dataset zip location
-            plant_zip = filedialog.askopenfilename(
-                title="Select Plant Disease Dataset ZIP",
-                filetypes=[("ZIP files", "*.zip")]
-            )
-            
-            # Ask user for landscape dataset zip location
-            landscape_zip = filedialog.askopenfilename(
-                title="Select Landscape Dataset ZIP",
-                filetypes=[("ZIP files", "*.zip")]
-            )
-            
-            if not plant_zip or not landscape_zip:
-                messagebox.showerror("Error", "Both dataset ZIP files must be selected")
-                return
-
             # Setup plant dataset
-            self.status_var.set("Extracting plant dataset...")
-            self.progress['value'] = 25
-            self.root.update()
-            
-            plant_manager = DatasetManager(plant_zip, os.path.join(Config.BASE_DIR, "data"))
-            plant_manager.setup_dataset()
+            plant_manager = DatasetManager(
+                Config.PLANT_ZIP_PATH,
+                os.path.join(Config.BASE_DIR, "data")
+            )
+            plant_manager.setup_dataset(dataset_type="plant")
             
             # Setup landscape dataset
-            self.status_var.set("Extracting landscape dataset...")
-            self.progress['value'] = 50
-            self.root.update()
-            
-            landscape_manager = DatasetManager(landscape_zip, os.path.join(Config.BASE_DIR, "data"))
-            landscape_manager.setup_landscape_dataset()  # New method needed in DatasetManager
-            
-            # Merge datasets
-            self.status_var.set("Merging datasets...")
-            self.progress['value'] = 75
-            self.root.update()
-            
-            self._merge_datasets()
+            landscape_manager = DatasetManager(
+                Config.LANDSCAPE_ZIP_PATH,
+                os.path.join(Config.BASE_DIR, "data")
+            )
+            landscape_manager.setup_dataset(dataset_type="landscape")
             
             self.status_var.set("Datasets setup completed!")
             self.dataset_status_var.set("Datasets verified ✓")
@@ -532,47 +511,6 @@ class TrainingGUI:
             self.dataset_status_var.set("Dataset setup failed!")
             messagebox.showerror("Error", str(e))
             print(f"Error details: {str(e)}")
-
-    def _merge_datasets(self):
-        """Merge landscape dataset into plant dataset structure"""
-        base_dir = os.path.join(Config.BASE_DIR, "data", "plantDataset")
-        landscape_dir = os.path.join(Config.BASE_DIR, "data", "landscapeDataset")
-        
-        # Get the landscape class index from DEFAULT_CLASS_NAMES
-        landscape_class_id = None
-        for class_id, (plant, condition) in DEFAULT_CLASS_NAMES.items():
-            if plant == "Landscape":
-                landscape_class_id = class_id
-                break
-        
-        if landscape_class_id is None:
-            raise ValueError("Landscape class not found in DEFAULT_CLASS_NAMES")
-        
-        print(f"Moving landscape images to class index: {landscape_class_id}")
-        
-        # For each split (train/valid/test)
-        for split in ['train', 'valid', 'test']:
-            # Create landscape class directory using the class ID
-            target_dir = os.path.join(base_dir, split, f"c{landscape_class_id}_landscape")
-            source_dir = os.path.join(landscape_dir, split)
-            
-            # Create landscape class directory if it doesn't exist
-            os.makedirs(target_dir, exist_ok=True)
-            
-            # Move all landscape images to the target directory
-            if os.path.exists(source_dir):
-                print(f"Processing {split} split...")
-                count = 0
-                for root, _, files in os.walk(source_dir):
-                    for img in files:
-                        if img.lower().endswith(('.jpg', '.jpeg', '.png')):
-                            src_path = os.path.join(root, img)
-                            # Add prefix to ensure unique filenames
-                            dst_filename = f"landscape_{count}_{img}"
-                            dst_path = os.path.join(target_dir, dst_filename)
-                            shutil.copy2(src_path, dst_path)
-                            count += 1
-                print(f"Moved {count} images to {target_dir}")
 
 
 def launch_gui():

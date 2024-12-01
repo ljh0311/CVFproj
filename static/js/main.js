@@ -20,28 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Your existing background image code can stay
-    function setBackgroundImage(url) {
-        if (!url) return;
-        const img = new Image();
-        img.onload = function() {
-            document.body.style.backgroundImage = `url("${url}")`;
-        }
-        img.src = url;
-    }
-
-    // Keep your existing background fetching logic
-    async function fetchNewBackground() {
-        try {
-            setBackgroundImage('/get_random_background');
-        } catch (error) {
-            console.error('Error fetching background:', error);
-        }
-    }
-
-    fetchNewBackground();
-    setInterval(fetchNewBackground, 30000);
-
     // Page transition handler
     function handlePageTransition(event) {
         event.preventDefault();
@@ -70,4 +48,59 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pageContent) {
         pageContent.classList.add('slide-in');
     }
+
+    // Prediction form submission
+    document.querySelector('form[action="/predict"]').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        
+        fetch('/predict', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+            } else {
+                // Update the prediction results on the page
+                const resultsHtml = `
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-body">
+                            <h2 class="h4 text-center mb-3">Results</h2>
+                            <p class="text-center mb-2">Disease Label: ${data.class_name}</p>
+                            <p class="text-center text-success fw-bold">Confidence Score: ${data.confidence.toFixed(2)}%</p>
+                        </div>
+                    </div>`;
+                document.querySelector('.prediction-results').innerHTML = resultsHtml;
+            }
+        })
+        .catch(error => {
+            showError('An error occurred while processing your request.');
+        });
+    });
+
+    // Contribution form submission
+    document.querySelector('form[action="/contribute"]').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        
+        fetch('/contribute', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+            } else {
+                // Show success message
+                showSuccess(data.message);
+                this.reset();
+            }
+        })
+        .catch(error => {
+            showError('An error occurred while contributing images.');
+        });
+    });
 }); 

@@ -7,26 +7,42 @@ from app.data.transforms import DataTransforms
 from app.utils.dataset_manager import DatasetManager
 from app.models.model import ModelBuilder, Trainer
 from utils.visualization import plot_training_history
-from app.utils import get_next_version
 
 
-def main(epochs=None, lr=None, batch_size=None, model_type=None, progress_callback=None):
+def get_next_version(model_type):
+    """Get the next available version number for the model."""
+    model_dir = os.path.join(Config.BASE_DIR, "models")
+    existing_models = [f for f in os.listdir(model_dir) if f.startswith(model_type)]
+    if not existing_models:
+        return "1.0"
+    
+    versions = [float(f.split('_v')[1].split('.pth')[0]) for f in existing_models]
+    return f"{max(versions) + 1.0:.1f}"
+
+
+def get_model_filename(model_type, num_classes, epochs, lr, batch_size):
+    """Generate a standardized model filename."""
+    return f"{model_type}_{num_classes}_{epochs}_{lr}_{batch_size}.pth"
+
+
+def main(epochs=None, lr=None, batch_size=None, model_type=None, model_name=None, progress_callback=None):
     """Main training function."""
+    # Use provided parameters or defaults from Config
+    epochs = epochs or Config.EPOCHS
+    lr = lr or Config.LR
+    batch_size = batch_size or Config.BATCH_SIZE
+    model_type = model_type or "resnet50"
+    
     print("Starting the training pipeline...")
-
-    # Update Config with provided parameters if they exist
-    if epochs is not None:
-        Config.EPOCHS = epochs
-    if lr is not None:
-        Config.LR = lr
-    if batch_size is not None:
-        Config.BATCH_SIZE = batch_size
-    if model_type is not None:
-        Config.MODEL_TYPE = model_type
-
+    print(f"\nTraining parameters:")
+    print(f"- Epochs: {epochs}")
+    print(f"- Batch Size: {batch_size}")
+    print(f"- Learning Rate: {lr}")
+    
     # Create necessary directories
     os.makedirs(os.path.join(Config.BASE_DIR, "models"), exist_ok=True)
     os.makedirs(os.path.join(Config.BASE_DIR, "data"), exist_ok=True)
+    os.makedirs(Config.CHECKPOINT_DIR, exist_ok=True)
 
     # 1. Set up dataset
     dataset_path = os.path.join(Config.BASE_DIR, "data", "plantDataset")
@@ -35,11 +51,14 @@ def main(epochs=None, lr=None, batch_size=None, model_type=None, progress_callba
     if not os.path.exists(dataset_path):
         print("\nDataset not found. Attempting to extract from zip file...")
         try:
-            dataset_manager.setup_dataset()
+            dataset_manager = DatasetManager(
+                Config.PLANT_ZIP_PATH, os.path.join(Config.BASE_DIR, "data")
+            )
+            dataset_manager.setup_dataset(dataset_type="plant")
         except FileNotFoundError as e:
             print(f"\nError: {str(e)}")
             print("Please ensure the dataset zip file is in the correct location:")
-            print(f"Expected path: {Config.ZIP_PATH}")
+            print(f"Expected path: {Config.PLANT_ZIP_PATH}")
             return
         except Exception as e:
             print(f"\nError extracting dataset: {str(e)}")
@@ -64,7 +83,7 @@ def main(epochs=None, lr=None, batch_size=None, model_type=None, progress_callba
 
         # Save class names to a file
         class_names_path = os.path.join(Config.BASE_DIR, "models", "class_names.txt")
-        with open(class_names_path, "w") as f:
+        with open(class_names_path, 'w', encoding='utf-8') as f:
             for idx, class_name in enumerate(class_names):
                 f.write(f"{idx}:{class_name}\n")
 
@@ -119,59 +138,34 @@ def main(epochs=None, lr=None, batch_size=None, model_type=None, progress_callba
     # 3. Create and setup model
     try:
         print("\nInitializing model...")
-        model = ModelBuilder.create_model(len(train_dataset.classes))
-        model_type = model.__class__.__name__
+        num_classes = len(train_dataset.classes)
+        model = ModelBuilder.create_model(num_classes)
+        model_type = model_type or model.__class__.__name__.lower()
         
-        # Check for existing checkpoint
-        checkpoint_path = os.path.join(Config.CHECKPOINT_DIR, "last_checkpoint.pth")
+        # Generate model filename with parameters
+        model_filename = get_model_filename(model_type, num_classes, epochs, lr, batch_size)
+        checkpoint_filename = f"checkpoint_{model_filename}"
+        
+        # Update paths with new filenames
+        model_save_path = os.path.join(Config.MODEL_DIR, model_filename)
+        checkpoint_path = os.path.join(Config.CHECKPOINT_DIR, checkpoint_filename)
+        
+        # Check for existing checkpoint with same parameters
         if os.path.exists(checkpoint_path):
-            print("\nFound existing checkpoint.")
+            print(f"\nFound existing checkpoint: {checkpoint_filename}")
             try:
-                checkpoint = torch.load(checkpoint_path, map_location=Config.DEVICE)
-                
-                # Handle different checkpoint formats
-                if isinstance(checkpoint, dict):
-                    if 'state_dict' in checkpoint:
-                        state_dict = checkpoint['state_dict']
-                    else:
-                        state_dict = checkpoint
-                else:
-                    state_dict = checkpoint
-                
-                # Check if the model architecture matches
-                if 'fc.weight' in state_dict:
-                    num_classes_checkpoint = state_dict['fc.weight'].size(0)
-                    if num_classes_checkpoint != len(train_dataset.classes):
-                        print(f"Warning: Number of classes in checkpoint ({num_classes_checkpoint}) "
-                              f"differs from current dataset ({len(train_dataset.classes)})")
-                        response = input("Would you like to (1) train a new model or (2) delete existing checkpoint? [1/2]: ")
-                        if response == '2':
-                            os.remove(checkpoint_path)
-                            print("Checkpoint deleted. Training new model...")
-                        else:
-                            print("Starting fresh training...")
-                        # Get a new version number for the model
-                        version = get_next_version(model_type)
-                    else:
-                        # If classes match, load the checkpoint
-                        model.load_state_dict(state_dict)
-                        print("Loaded existing checkpoint successfully!")
-                        version = checkpoint.get('version', get_next_version(model_type)) if isinstance(checkpoint, dict) else get_next_version(model_type)
-                else:
-                    print("Warning: Invalid checkpoint format. Starting with a fresh model.")
-                    version = get_next_version(model_type)
+                checkpoint = torch.load(checkpoint_path)
+                if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+                    print("Loading checkpoint...")
+                    model.load_state_dict(checkpoint['state_dict'])
+                    print("Checkpoint loaded successfully!")
             except Exception as e:
-                print(f"Error loading checkpoint: {str(e)}")
-                print("Starting with a fresh model.")
-                version = get_next_version(model_type)
-        else:
-            version = get_next_version(model_type)
-            
-        model_type_versioned = f"{model_type}_v{version}"
-        print(f"Creating model: {model_type_versioned}")
+                print(f"Warning: Error loading checkpoint ({str(e)}). Starting fresh training...")
+        
         model = model.to(Config.DEVICE)
-        print(f"Model created with {len(train_dataset.classes)} output classes")
-        print(f"Using device: {Config.DEVICE}")
+        print(f"Model: {model_filename}")
+        print(f"Number of classes: {num_classes}")
+        print(f"Device: {Config.DEVICE}")
 
     except Exception as e:
         print(f"\nError creating model: {str(e)}")
@@ -186,12 +180,13 @@ def main(epochs=None, lr=None, batch_size=None, model_type=None, progress_callba
         print(f"- Batch Size: {batch_size}")
         
         trainer = Trainer(model, Config.DEVICE)
+        trainer.model_save_path = model_save_path
+        trainer.checkpoint_path = checkpoint_path
         history = trainer.train_model(
             dataloaders["train"],
             dataloaders["val"],
-            num_epochs=Config.EPOCHS,
-            lr=Config.LR,
-            progress_callback=progress_callback
+            num_epochs=epochs,
+            lr=lr,
         )
 
     except Exception as e:
@@ -214,7 +209,7 @@ def main(epochs=None, lr=None, batch_size=None, model_type=None, progress_callba
             train_losses=history[0],
             val_losses=history[1],
             val_accuracies=history[2],
-            model_name=model_type_versioned,  # Use versioned name
+            model_name=model_filename  # Use versioned name
         )
         print(f"Training plots saved to: {plot_path}")
     except Exception as e:
@@ -231,8 +226,13 @@ if __name__ == "__main__":
         lr = float(input("Enter learning rate (default 0.001): ") or 0.001)
         
         # Update config with user parameters
-        Config.update_training_params(epochs=epochs, batch_size=batch_size, lr=lr)
+        Config.update_params(
+            EPOCHS=epochs,
+            BATCH_SIZE=batch_size,
+            LR=lr
+        )
         
+        # Call main without parameters
         model, history = main()
         print("\nTraining completed successfully!")
     except Exception as e:

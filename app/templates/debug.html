@@ -31,7 +31,7 @@
                                         <th scope="row">Model Names:</th>
                                         <td>{% if model_names %}{{ model_names|join(', ') }}{% else %}None{% endif %}</td>
                                     </tr>
-                                    <tr>
+                                    <tr> 
                                         <th scope="row">Model Directory:</th>
                                         <td>{{ model_dir if model_dir else 'Not specified' }}</td>
                                     </tr>
@@ -49,15 +49,122 @@
                         <div class="mt-4">
                             <h6 class="mb-3">Model Files Status:</h6>
                             <ul class="list-group">
-                                {% for model_name, info in models.items() %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    {{ model_name }}
-                                    <span class="badge {% if info.exists %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
-                                        {% if info.exists %}Found{% else %}Missing{% endif %}
-                                    </span>
-                                </li>
-                                {% endfor %}
+                                {% if models %}
+                                    {% for model_name, info in models.items() %}
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            {{ model_name }}
+                                            <span class="badge {% if info.exists %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
+                                                {% if info.exists %}Found{% else %}Missing{% endif %}
+                                            </span>
+                                        </li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li class="list-group-item">No models found.</li>
+                                {% endif %}
                             </ul>
+                        </div>
+
+                        <!-- Add this section after the model files status -->
+                        <div class="mt-4">
+                            <h6 class="mb-3">Model Verification Results</h6>
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <tbody>
+                                        <tr>
+                                            <th scope="row">Base Directory:</th>
+                                            <td>{{ verify_results.base_dir if verify_results else 'Not available' }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">Models Directory:</th>
+                                            <td>{{ verify_results.model_dir if verify_results else 'Not available' }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">Directory Status:</th>
+                                            <td>
+                                                {% if verify_results and verify_results.directories_exist %}
+                                                <span class="badge bg-success">All directories exist</span>
+                                                {% else %}
+                                                <span class="badge bg-danger">Missing directories</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Add this section for test predictions -->
+                        <div class="mt-4">
+                            <h6 class="mb-3">Model Test Predictions</h6>
+                            <div class="row">
+                                <!-- Plant Image Test -->
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Plant Test Image</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            {% if test_results and test_results.plant_image %}
+                                                <img src="{{ test_results.plant_image }}" 
+                                                     class="img-fluid mb-3" 
+                                                     alt="Plant test image">
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm">
+                                                        <tr>
+                                                            <th>True Class:</th>
+                                                            <td>{{ test_results.plant_true_class }}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Predicted:</th>
+                                                            <td>{{ test_results.plant_predicted }}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Confidence:</th>
+                                                            <td>{{ "%.2f"|format(test_results.plant_confidence * 100) }}%</td>
+                                                        </tr>
+                                                    </table>
+                                                </div>
+                                            {% else %}
+                                                <div class="alert alert-info">No plant test image available</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Landscape Image Test -->
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Landscape Test Image</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            {% if test_results and test_results.landscape_image %}
+                                                <img src="{{ test_results.landscape_image }}" 
+                                                     class="img-fluid mb-3" 
+                                                     alt="Landscape test image">
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm">
+                                                        <tr>
+                                                            <th>True Class:</th>
+                                                            <td>{{ test_results.landscape_true_class }}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Predicted:</th>
+                                                            <td>{{ test_results.landscape_predicted }}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Confidence:</th>
+                                                            <td>{{ "%.2f"|format(test_results.landscape_confidence * 100) }}%</td>
+                                                        </tr>
+                                                    </table>
+                                                </div>
+                                            {% else %}
+                                                <div class="alert alert-info">No landscape test image available</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Add this after the model status section -->

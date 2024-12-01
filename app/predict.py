@@ -9,12 +9,12 @@ import glob
 from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 from app.models.model import ModelBuilder  # Import ModelBuilder
 from app.constants import MODEL_DIR, UPLOAD_FOLDER
+from app.config import Config  # Add this import
 
 # Define constants
-MODEL_DIR = r"C:\Users\user\Documents\SITstuffs\CompVis\CVFproj\models"
-UPLOAD_FOLDER = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "temp", "uploads"
-)
+MODEL_DIR = os.path.join(Config.BASE_DIR, "models")  # Update this to use Config
+UPLOAD_FOLDER = os.path.join(Config.BASE_DIR, "temp", "uploads")  # Update this too
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Add default CLASS_NAMES at the top of the file
@@ -56,21 +56,31 @@ DEFAULT_CLASS_NAMES = {
     34: ("Tomato", "Spider Mites Two-spotted Spider Mite"),
     35: ("Tomato", "Target Spot"),
     36: ("Tomato", "Tomato Mosaic Virus"),
-    37: ("Tomato", "Tomato Yellow Leaf Curl Virus")
+    37: ("Tomato", "Tomato Yellow Leaf Curl Virus"),
 }
 
 def load_class_names():
     """Load class names from file."""
-    class_names_path = os.path.join(MODEL_DIR, "class_names.txt")
-    if os.path.exists(class_names_path):
-        class_names = {}
-        with open(class_names_path, 'r') as f:
+    class_names_path = os.path.join(Config.BASE_DIR, "models", "class_names.txt")
+    class_names = {}
+    
+    try:
+        with open(class_names_path, 'r', encoding='utf-8') as f:
             for line in f:
-                idx, name = line.strip().split(':')
-                plant, condition = name.split('___') if '___' in name else (name, name)
-                class_names[int(idx)] = (plant.replace('_', ' '), condition.replace('_', ' '))
-        return class_names
-    return DEFAULT_CLASS_NAMES  # Fallback to default classes
+                line = line.strip()
+                if ':' in line:  # Only process lines that contain a colon
+                    idx, name = line.split(':', 1)  # Split on first colon only
+                    class_names[int(idx)] = name
+                else:
+                    print(f"Warning: Skipping malformed line in class_names.txt: {line}")
+    except FileNotFoundError:
+        print(f"Warning: Class names file not found at {class_names_path}")
+        return {}
+    except Exception as e:
+        print(f"Error loading class names: {str(e)}")
+        return {}
+        
+    return class_names
 
 # Now define CLASS_NAMES
 CLASS_NAMES = load_class_names()
@@ -78,11 +88,12 @@ CLASS_NAMES = load_class_names()
 
 def get_available_models():
     """Get list of available model files."""
-    if not os.path.exists(MODEL_DIR):
-        print(f"Model directory not found: {MODEL_DIR}")
+    model_dir = os.path.join(Config.BASE_DIR, "models")
+    if not os.path.exists(model_dir):
+        print(f"Model directory not found: {model_dir}")
         return []
         
-    model_files = glob.glob(os.path.join(MODEL_DIR, "*.pth"))
+    model_files = glob.glob(os.path.join(model_dir, "*.pth"))
     print(f"Found model files: {model_files}")  # Debug print
     return [os.path.basename(f) for f in model_files]
 
@@ -93,6 +104,11 @@ class Predictor:
         self.model_path = model_path
         self.model_type = model_type
         self.model = self._load_model()
+        self.transform = transforms.Compose([
+            transforms.Resize(Config.IMAGE_SIZE),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=Config.NORMALIZE_MEAN, std=Config.NORMALIZE_STD)
+        ])
         
     def _load_model(self):
         if self.model_type == "resnet50":

@@ -51,15 +51,17 @@
                             </div>
                         </div>
 
-                        {% if prediction %}
-                            <div class="card shadow-sm mb-4">
-                                <div class="card-body">
-                                    <h2 class="h4 text-center mb-3">Results</h2>
-                                    <p class="text-center mb-2">Disease Label: {{ prediction.label }}</p>
-                                    <p class="text-center text-success fw-bold">Confidence Score: {{ '%.2f'|format(prediction.confidence) }}%</p>
+                        <div class="prediction-results">
+                            {% if prediction %}
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-body">
+                                        <h2 class="h4 text-center mb-3">Results</h2>
+                                        <p class="text-center mb-2">Disease Label: {{ prediction.label }}</p>
+                                        <p class="text-center text-success fw-bold">Confidence Score: {{ "%.2f"|format(prediction.confidence) }}%</p>
+                                    </div>
                                 </div>
-                            </div>
-                        {% endif %}
+                            {% endif %}
+                        </div>
 
                         {% if success %}
                             <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
@@ -76,8 +78,8 @@
                                         <label for="disease_label" class="form-label">Disease Label:</label>
                                         <select name="disease_label" id="disease_label" class="form-select" required>
                                             <option value="">Select Disease Type</option>
-                                            {% for class_id, (plant, condition) in class_names.items() %}
-                                                <option value="{{ plant }}_{{ condition }}">{{ plant }} - {{ condition }}</option>
+                                            {% for class_id, class_name in class_names.items() %}
+                                                <option value="{{ class_name }}">{{ class_name }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
@@ -152,5 +154,63 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <!-- Error Modal -->
+    <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="errorModalLabel">Error</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="errorModalBody">
+                    <!-- Error message will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showError(message) {
+            const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+            document.getElementById('errorModalBody').textContent = message;
+            errorModal.show();
+        }
+
+        {% if error %}
+            document.addEventListener('DOMContentLoaded', function() {
+                showError("{{ error }}");
+            });
+        {% endif %}
+    </script>
+
+    <!-- Success Modal -->
+    <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="successModalLabel">Success</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="successModalBody">
+                    <!-- Success message will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showSuccess(message) {
+            const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+            document.getElementById('successModalBody').textContent = message;
+            successModal.show();
+        }
+    </script>
 </body>
 </html>

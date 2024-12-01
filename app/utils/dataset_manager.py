@@ -3,6 +3,8 @@ import shutil
 import zipfile
 import sys
 
+from app.config import Config
+
 
 class DatasetManager:
     """Handles dataset download, extraction and preparation."""
@@ -11,75 +13,103 @@ class DatasetManager:
         self.zip_path = os.path.abspath(zip_path)
         self.target_dir = os.path.abspath(target_dir)
 
-    def setup_dataset(self):
+    def setup_dataset(self, dataset_type="plant"):
         """Extract and organize the dataset."""
         print("\nSetting up dataset...")
+        
+        # Use correct zip path based on dataset type
+        if dataset_type == "plant":
+            self.zip_path = Config.PLANT_ZIP_PATH
+        elif dataset_type == "landscape":
+            self.zip_path = Config.LANDSCAPE_ZIP_PATH
+        else:
+            raise ValueError(f"Unknown dataset type: {dataset_type}")
+        
+        print(f"Using zip file: {self.zip_path}")
         print(f"Target directory: {self.target_dir}")
 
+        # Verify the zip file exists and is valid
         if not os.path.exists(self.zip_path):
             raise FileNotFoundError(f"Dataset zip file not found at: {self.zip_path}")
 
         if not zipfile.is_zipfile(self.zip_path):
             raise ValueError(f"Provided file is not a valid zip file: {self.zip_path}")
 
+        # Create target directory if it doesn't exist
+        os.makedirs(self.target_dir, exist_ok=True)
+
+        # Determine dataset type based on zip file name
+        zip_name = os.path.basename(self.zip_path).lower()
+        is_plant_dataset = "plant" in zip_name
+        is_landscape_dataset = "landscape" in zip_name
+
+        if not (is_plant_dataset or is_landscape_dataset):
+            raise ValueError("Unrecognized dataset type. Zip file name should contain 'plant' or 'landscape'")
+
         try:
-            # Clean up existing directories
-            dataset_path = os.path.join(self.target_dir, "plantDataset")
-            temp_dir = os.path.join(self.target_dir, "temp_extract")
+            if is_landscape_dataset:
+                # For landscape dataset, extract directly to target directory
+                print("Setting up landscape dataset...")
+                landscape_dir = os.path.join(self.target_dir, "landscapeDataset")
+                os.makedirs(landscape_dir, exist_ok=True)
+                
+                with zipfile.ZipFile(self.zip_path, "r") as zip_ref:
+                    zip_ref.extractall(landscape_dir)
+                print("Landscape dataset extraction completed!")
+                
+            else:
+                # For plant dataset, handle the nested structure
+                print("Setting up plant disease dataset...")
+                dataset_path = os.path.join(self.target_dir, "plantDataset")
+                temp_dir = os.path.join(self.target_dir, "temp_extract")
 
-            for path in [dataset_path, temp_dir]:
-                if os.path.exists(path):
-                    print(f"Removing existing directory: {path}")
-                    shutil.rmtree(path)
+                # Clean up existing directories
+                for path in [dataset_path, temp_dir]:
+                    if os.path.exists(path):
+                        print(f"Removing existing directory: {path}")
+                        shutil.rmtree(path)
 
-            # Create fresh directories
-            os.makedirs(temp_dir)
-            os.makedirs(dataset_path)
+                # Create fresh directories
+                os.makedirs(temp_dir)
+                os.makedirs(dataset_path)
 
-            # Extract the zip file
-            print(f"Extracting dataset from {self.zip_path}...")
-            with zipfile.ZipFile(self.zip_path, "r") as zip_ref:
-                zip_ref.extractall(temp_dir)
-            print("Extraction completed!")
+                # Extract the zip file
+                print(f"Extracting dataset from {self.zip_path}...")
+                with zipfile.ZipFile(self.zip_path, "r") as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                print("Extraction completed!")
 
-            # Find the source directories
-            base_path = os.path.join(temp_dir, "New Plant Diseases Dataset(Augmented)")
-            if os.path.exists(
-                os.path.join(base_path, "New Plant Diseases Dataset(Augmented)")
-            ):
-                base_path = os.path.join(
-                    base_path, "New Plant Diseases Dataset(Augmented)"
-                )
+                # Find the source directories
+                base_path = os.path.join(temp_dir, "New Plant Diseases Dataset(Augmented)")
+                if os.path.exists(os.path.join(base_path, "New Plant Diseases Dataset(Augmented)")):
+                    base_path = os.path.join(base_path, "New Plant Diseases Dataset(Augmented)")
 
-            # Move directories
-            for dir_name in ["train", "valid", "test"]:
-                src = os.path.join(base_path, dir_name)
-                dst = os.path.join(dataset_path, dir_name)
+                # Move directories
+                for dir_name in ["train", "valid", "test"]:
+                    src = os.path.join(base_path, dir_name)
+                    dst = os.path.join(dataset_path, dir_name)
 
-                if os.path.exists(src):
-                    print(f"Moving {dir_name} directory...")
-                    shutil.copytree(src, dst)
-                else:
-                    print(f"Warning: {dir_name} directory not found in source")
+                    if os.path.exists(src):
+                        print(f"Moving {dir_name} directory...")
+                        shutil.copytree(src, dst)
+                    else:
+                        print(f"Warning: {dir_name} directory not found in source")
 
-            # Clean up
-            print("Cleaning up temporary files...")
-            shutil.rmtree(temp_dir)
+                # Clean up
+                print("Cleaning up temporary files...")
+                shutil.rmtree(temp_dir)
 
-            # Verify the final structure
-            self._verify_dataset_structure(dataset_path)
-            
-            # Rename the images
-            self.rename_images()
-            
-            print("Dataset setup completed successfully!")
+                # Verify the final structure
+                self._verify_dataset_structure(dataset_path)
+                print("Dataset setup completed successfully!")
 
         except Exception as e:
             print(f"\nError processing dataset: {str(e)}")
             # Clean up on error
-            for path in [temp_dir, dataset_path]:
-                if os.path.exists(path):
-                    shutil.rmtree(path)
+            if is_plant_dataset:
+                for path in [temp_dir, dataset_path]:
+                    if os.path.exists(path):
+                        shutil.rmtree(path)
             raise
 
     def _verify_dataset_structure(self, dataset_path):
