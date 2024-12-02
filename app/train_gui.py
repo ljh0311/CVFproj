@@ -3,6 +3,7 @@ import sys
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+from tkinter import scrolledtext
 from app.config import Config  # Changed from app.config
 from app.train import main as train_main, get_next_version  # Changed from app.train
 from app.predict import DEFAULT_CLASS_NAMES
@@ -25,15 +26,92 @@ class TrainingGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Plant Disease Model Training")
+        self.root.minsize(600, 800)  # Add minimum window size
 
-        # Make the window resizable
-        self.root.rowconfigure(0, weight=1)
-        self.root.columnconfigure(0, weight=1)
+        # Create a canvas with scrollbar for the entire content
+        canvas = tk.Canvas(root)
+        scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
 
-        # Main container with padding
-        main_frame = ttk.Frame(root, padding="40")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        main_frame.columnconfigure(0, weight=1)
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Create main layout frames
+        left_frame = ttk.Frame(scrollable_frame, padding="20")
+        right_frame = ttk.Frame(scrollable_frame, padding="20")
+        
+        # Configure grid weights for the frames
+        scrollable_frame.columnconfigure(0, weight=3)  # Left frame takes 3/4
+        scrollable_frame.columnconfigure(1, weight=1)  # Right frame takes 1/4
+        
+        # Place frames in grid
+        left_frame.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.E, tk.W))
+        right_frame.grid(row=0, column=1, sticky=(tk.N, tk.S, tk.E, tk.W))
+
+        # Move all existing content to left_frame instead of main_frame
+        # (Replace main_frame with left_frame in all the widget definitions)
+
+        # Log Text - Move to right frame
+        log_frame = ttk.LabelFrame(right_frame, text="Training Log", padding="10")
+        log_frame.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.E, tk.W))
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
+
+        self.log_text = tk.Text(log_frame, height=30, width=40)
+        self.log_text.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.E, tk.W))
+        
+        # Add scrollbar for log
+        log_scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
+        log_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.log_text.configure(yscrollcommand=log_scrollbar.set)
+
+        # Pack the canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Add dataset setup frame after model configuration section
+        dataset_frame = ttk.LabelFrame(
+            left_frame, text="Dataset Configuration", padding="20"
+        )
+        dataset_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=10)
+        dataset_frame.columnconfigure(0, weight=1)
+        
+        # Dataset setup button
+        self.setup_dataset_button = ttk.Button(
+            dataset_frame,
+            text="Setup Datasets",
+            command=self.setup_datasets
+        )
+        self.setup_dataset_button.grid(row=0, column=0, pady=5)
+        
+        # Dataset status
+        self.dataset_status_var = tk.StringVar(value="Datasets not verified")
+        ttk.Label(
+            dataset_frame,
+            textvariable=self.dataset_status_var,
+            font=("Helvetica", 10),
+            foreground="#666666"
+        ).grid(row=1, column=0, pady=5)
+        
+        # Add warning note
+        warning_text = "Note: Only use this setup when:\n1. First time initializing the dataset\n2. Need to clean and refresh existing dataset"
+        warning_label = ttk.Label(
+            dataset_frame,
+            text=warning_text,
+            font=("Helvetica", 9),
+            foreground="#CC0000",  # Red color for warning
+            justify=tk.LEFT,
+            wraplength=400
+        )
+        warning_label.grid(row=2, column=0, pady=(5, 10), sticky='w')
+        
+        # Configure styles
+        self.configure_styles()
 
         # Initialize variables
         self.action_var = tk.StringVar(value="train")
@@ -41,29 +119,27 @@ class TrainingGUI:
         self.lr_var = tk.StringVar()
         self.batch_size_var = tk.StringVar()
         self.existing_model_var = tk.StringVar()
-        self.model_arch_var = tk.StringVar(value="resnet50")  # Default to ResNet-50
+        self.model_arch_var = tk.StringVar(value="resnet50")
 
-        # Title Section
+        # Title Section in left_frame
         title_label = ttk.Label(
-            main_frame,
+            left_frame,
             text="Plant Disease Prediction",
             font=("Helvetica", 36, "bold"),
             foreground="#19783B",
         )
         title_label.grid(row=0, column=0, sticky=(tk.W, tk.E))
 
-        # Subtitle
         subtitle_label = ttk.Label(
-            main_frame,
+            left_frame,
             text="Train or evaluate plant disease detection models",
             font=("Helvetica", 12),
             foreground="#666666",
         )
         subtitle_label.grid(row=1, column=0, pady=(0, 20))
 
-        # About Button
         about_button = ttk.Button(
-            main_frame,
+            left_frame,
             text="About This Project",
             style="Link.TButton",
             command=self.show_about,
@@ -72,7 +148,7 @@ class TrainingGUI:
 
         # Model Configuration Section
         model_frame = ttk.LabelFrame(
-            main_frame, text="Model Configuration", padding="20"
+            left_frame, text="Model Configuration", padding="20"
         )
         model_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=10)
         model_frame.columnconfigure(0, weight=1)
@@ -106,14 +182,7 @@ class TrainingGUI:
         self.training_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(20, 0))
         self.training_frame.columnconfigure(1, weight=1)
 
-        # Training Parameters
-        params = [
-            ("Epochs:", self.epochs_var, "10"),
-            ("Learning Rate:", self.lr_var, "0.001"),
-            ("Batch Size:", self.batch_size_var, "32"),
-        ]
-
-        # Add model architecture selector before training parameters
+        # Model Architecture selector
         ttk.Label(self.training_frame, text="Model Architecture:", font=("Helvetica", 10)).grid(
             row=0, column=0, sticky=tk.W, pady=5
         )
@@ -125,14 +194,20 @@ class TrainingGUI:
             width=15
         )
         model_arch_combo.grid(row=0, column=1, sticky=tk.W, padx=(10, 0))
-        
-        # Adjust row numbers for other parameters
-        for idx, (label, var, default) in enumerate(params):
+
+        # Training Parameters
+        params = [
+            ("Epochs:", self.epochs_var, "10"),
+            ("Learning Rate:", self.lr_var, "0.001"),
+            ("Batch Size:", self.batch_size_var, "32"),
+        ]
+
+        for idx, (label, var, default) in enumerate(params, start=1):
             ttk.Label(self.training_frame, text=label, font=("Helvetica", 10)).grid(
-                row=idx+1, column=0, sticky=tk.W, pady=5  # Add 1 to row index
+                row=idx, column=0, sticky=tk.W, pady=5
             )
             entry = ttk.Entry(self.training_frame, textvariable=var, width=15)
-            entry.grid(row=idx+1, column=1, sticky=tk.W, padx=(10, 0))  # Add 1 to row index
+            entry.grid(row=idx, column=1, sticky=tk.W, padx=(10, 0))
             var.set(default)
 
         # Evaluation Frame
@@ -151,99 +226,42 @@ class TrainingGUI:
         # Initially hide evaluation frame
         self.eval_frame.grid_remove()
 
-        # Action Button (using tk.Button for custom colors)
+        # Progress section
+        progress_frame = ttk.Frame(left_frame)
+        progress_frame.grid(row=5, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        progress_frame.columnconfigure(0, weight=1)
+
+        # Action Button
         self.action_button = tk.Button(
-            main_frame,
+            progress_frame,
             text="Start Training",
             command=self.execute_action,
-            bg="#19783B",  # Green background
-            fg="white",  # White text
+            bg="#19783B",
+            fg="white",
             font=("Helvetica", 10),
             relief="flat",
             padx=20,
             pady=10,
         )
-        self.action_button.grid(row=4, column=0, pady=30)
+        self.action_button.grid(row=0, column=0, pady=(0, 10))
 
         # Progress Bar
         self.progress = ttk.Progressbar(
-            main_frame,
+            progress_frame,
             length=400,
             mode="determinate",
             style="Modern.Horizontal.TProgressbar",
         )
-        self.progress.grid(row=5, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.progress.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
 
         # Status Label
         self.status_var = tk.StringVar(value="Ready")
         ttk.Label(
-            main_frame,
+            progress_frame,
             textvariable=self.status_var,
             font=("Helvetica", 10),
             foreground="#666666",
-        ).grid(row=6, column=0)
-
-        # Add a text widget for logging
-        self.log_text = tk.Text(main_frame, height=10, width=50)
-        self.log_text.grid(row=7, column=0, pady=10, sticky=(tk.W, tk.E))
-        
-        # Add scrollbar for log
-        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=self.log_text.yview)
-        scrollbar.grid(row=7, column=1, sticky=(tk.N, tk.S))
-        self.log_text.configure(yscrollcommand=scrollbar.set)
-        
-        # Make the log read-only
-        self.log_text.configure(state='disabled')
-
-        # Add dataset setup frame after model configuration section
-        dataset_frame = ttk.LabelFrame(
-            main_frame, text="Dataset Configuration", padding="20"
-        )
-        dataset_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=10)
-        dataset_frame.columnconfigure(0, weight=1)
-        
-        # Dataset setup button
-        self.setup_dataset_button = ttk.Button(
-            dataset_frame,
-            text="Setup Datasets",
-            command=self.setup_datasets
-        )
-        self.setup_dataset_button.grid(row=0, column=0, pady=5)
-        
-        # Dataset status
-        self.dataset_status_var = tk.StringVar(value="Datasets not verified")
-        ttk.Label(
-            dataset_frame,
-            textvariable=self.dataset_status_var,
-            font=("Helvetica", 10),
-            foreground="#666666"
-        ).grid(row=1, column=0, pady=5)
-        
-        # Add warning note
-        warning_text = "Note: Only use this setup when:\n1. First time initializing the dataset\n2. Need to clean and refresh existing dataset"
-        warning_label = ttk.Label(
-            dataset_frame,
-            text=warning_text,
-            font=("Helvetica", 9),
-            foreground="#CC0000",  # Red color for warning
-            justify=tk.LEFT,
-            wraplength=400
-        )
-        warning_label.grid(row=2, column=0, pady=(5, 10), sticky='w')
-        
-        # Adjust the grid row for existing elements
-        self.action_button.grid(row=5, column=0, pady=30)  # Change from row=4
-        self.progress.grid(row=6, column=0, sticky=(tk.W, tk.E), pady=(0, 10))  # Change from row=5
-        self.status_var = tk.StringVar(value="Ready")
-        ttk.Label(
-            main_frame,
-            textvariable=self.status_var,
-            font=("Helvetica", 10),
-            foreground="#666666",
-        ).grid(row=7, column=0)  # Change from row=6
-
-        # Configure styles
-        self.configure_styles()
+        ).grid(row=2, column=0, pady=(0, 5))
 
     def configure_styles(self):
         """Configure custom styles for widgets"""
@@ -383,11 +401,13 @@ class TrainingGUI:
             self.progress['value'] = 0
             self.root.update()
 
+            device = Config.DEVICE
+            
             # Initialize model with correct number of classes
             model = ModelBuilder.create_model(
                 num_classes=len(DEFAULT_CLASS_NAMES),
                 model_type=self.model_arch_var.get()
-            )
+            ).to(device)
             
             # Load checkpoint with weights_only=True and handle different model file formats
             model_path = os.path.join(Config.MODEL_DIR, self.existing_model_var.get())

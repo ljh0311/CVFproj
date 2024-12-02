@@ -1,6 +1,6 @@
 # Plantastic: Plant Disease Classification
 
-**Plantastic** is a deep learning-based project that aims to identify plant diseases by analyzing images of plant leaves. The project uses computer vision and deep learning techniques to classify images into healthy or diseased categories and further classify the disease type.
+**Plantastic** is a deep learning-based project that identifies plant diseases by analyzing leaf images and comparing them to patterns it has learned from thousands of other plant disease examples. The project uses computer vision and deep learning techniques to recognize visual symptoms and characteristics that indicate whether a plant is healthy or diseased, and can determine the specific type of disease based on these learned visual patterns.
 
 ## Version Control
 

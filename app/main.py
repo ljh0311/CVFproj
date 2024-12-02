@@ -7,7 +7,7 @@ from torchvision import datasets, transforms, models
 from PIL import Image
 import os
 import matplotlib.pyplot as plt
-from utils.dataset_manager import DatasetManager
+from app.utils.dataset_manager import DatasetManager
 
 
 # Configuration

@@ -5,8 +5,11 @@ from app.config import Config
 from app.data.dataset import CustomImageDataset
 from app.data.transforms import DataTransforms
 from app.utils.dataset_manager import DatasetManager
+from app.utils.dataset_manager import DatasetManager
 from app.models.model import ModelBuilder, Trainer
-from utils.visualization import plot_training_history
+from utils.visualization import plot_training_history, plot_confusion_matrix
+import matplotlib.pyplot as plt
+import sys
 
 
 def get_next_version(model_type):
@@ -46,7 +49,6 @@ def main(epochs=None, lr=None, batch_size=None, model_type=None, model_name=None
 
     # 1. Set up dataset
     dataset_path = os.path.join(Config.BASE_DIR, "data", "plantDataset")
-    dataset_manager = DatasetManager(Config.ZIP_PATH, os.path.join(Config.BASE_DIR, "data"))
     
     if not os.path.exists(dataset_path):
         print("\nDataset not found. Attempting to extract from zip file...")
@@ -193,25 +195,40 @@ def main(epochs=None, lr=None, batch_size=None, model_type=None, model_name=None
         print(f"\nError during training: {str(e)}")
         return
 
-    # 5. Evaluate on test set
+    # 5. Evaluate on test set and generate confusion matrix
     try:
         print("\nEvaluating on test set...")
         test_loss, test_acc = trainer.evaluate(dataloaders["test"])
         print(f"Final Test Accuracy: {test_acc:.2f}%")
 
+        # Generate and save confusion matrix
+        print("\nGenerating confusion matrix...")
+        confusion_matrix_path = plot_confusion_matrix(
+            model=model,
+            test_loader=dataloaders["test"],
+            class_names=class_names,
+            device=Config.DEVICE
+        )
+        print(f"Confusion matrix saved to: {confusion_matrix_path}")
+
     except Exception as e:
         print(f"\nError during evaluation: {str(e)}")
 
-    # 6. Plot and save results
+    # 6. Plot and save training history
     try:
         print("\nGenerating and saving training plots...")
         plot_path = plot_training_history(
             train_losses=history[0],
             val_losses=history[1],
             val_accuracies=history[2],
-            model_name=model_filename  # Use versioned name
+            model_name=model_filename
         )
         print(f"Training plots saved to: {plot_path}")
+        
+        # Show the plots if in interactive mode
+        if hasattr(sys, 'ps1'):  # Check if running in interactive mode
+            plt.show()
+            
     except Exception as e:
         print(f"\nError plotting and saving results: {str(e)}")
 
@@ -221,12 +238,19 @@ def main(epochs=None, lr=None, batch_size=None, model_type=None, model_name=None
 if __name__ == "__main__":
     try:
         # Get user input for training parameters
+        print("\nAvailable models:")
+        print("1. ResNet-50")
+        print("2. EfficientNet-B0")
+        model_choice = int(input("Choose model (1 or 2, default 1): ") or 1)
+        model_name = "resnet50" if model_choice == 1 else "efficientnet_b0"
+        
         epochs = int(input("Enter number of epochs (default 10): ") or 10)
         batch_size = int(input("Enter batch size (default 32): ") or 32)
         lr = float(input("Enter learning rate (default 0.001): ") or 0.001)
         
         # Update config with user parameters
         Config.update_params(
+            MODEL=model_name,
             EPOCHS=epochs,
             BATCH_SIZE=batch_size,
             LR=lr

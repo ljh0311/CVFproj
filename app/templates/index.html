@@ -1,216 +1,419 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Plant Disease Prediction</title>
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body class="bg-light">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <style>
+      .card-header[role='button'] {
+        cursor: pointer;
+      }
+      .card-header[role='button']:hover {
+        background-color: #f8f9fa;
+      }
+      .card-header[role='button'] span.float-end {
+        transition: transform 0.3s;
+      }
+      .card-header[role='button'][aria-expanded='true'] span.float-end {
+        transform: rotate(180deg);
+      }
+      .modal-body h4 {
+        color: #198754;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+      }
+      .modal-body h4:first-child {
+        margin-top: 0;
+      }
+      .modal-body ul {
+        padding-left: 1.2rem;
+      }
+      .modal-body .card {
+        margin-bottom: 1rem;
+      }
+      .modal-body .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #198754;
+      }
+    </style>
+  </head>
+  <body class="bg-light">
     <div class="slide-container">
-        <div class="page-content">
-            <div class="container py-5">
-                <div class="row justify-content-center">
-                    <div class="col-lg-8">
-                        <!-- Debug Info (collapsible) -->
-                        
+      <div class="page-content">
+        <div class="container py-5">
+          <div class="row justify-content-center">
+            <div class="col-lg-8">
+              <div class="text-center mb-5">
+                <h1 class="display-4 text-success fw-bold">Plant Disease Prediction</h1>
+                <p class="lead text-muted">Upload a plant leaf image to detect diseases</p>
+                <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#aboutModal">About This Project</button>
+              </div>
 
-                        <div class="text-center mb-5">
-                            <h1 class="display-4 text-success fw-bold">Plant Disease Prediction</h1>
-                            <p class="lead text-muted">Upload a plant leaf image to detect diseases</p>
+              <div class="card shadow-sm mb-4">
+                <div class="card-header" role="button" data-bs-toggle="collapse" data-bs-target="#classList" aria-expanded="false" aria-controls="classList">
+                  <h5 class="mb-0">
+                    Available Plant Disease Classes
+                    <span class="float-end">▼</span>
+                  </h5>
+                </div>
+                <div class="collapse" id="classList">
+                  <div class="card-body">
+                    <div class="row">
+                      {% for class_id, class_info in class_names.items() %}
+                        <div class="col-md-6 mb-2">
+                          <div class="d-flex align-items-center">
+                            <span class="badge bg-success me-2">{{ class_id }}</span>
+                            <span>{{ class_info.1 }}</span>
+                          </div>
                         </div>
+                      {% endfor %}
+                      <div class="col-12 mt-3">
+                        <h6 class="text-muted">Available Plants:</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                          {% for plant in class_names.values()|map(attribute='0')|unique|sort %}
+                            {% if plant != "Landscape" %}
+                              <span class="badge bg-light text-dark">{{ plant }}</span>
+                            {% endif %}
+                          {% endfor %}
+                        </div>
+                      </div>
+                      <div class="col-12 mt-3">
+                        <h6 class="text-muted">Non-Leaf Data:</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                          <span class="badge bg-light text-dark">Landscape</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-                        <div class="card shadow-sm mb-4">
-                            <div class="card-body p-4">
-                                <form action="/predict" method="POST" enctype="multipart/form-data" class="text-center">
-                                    <div class="mb-4">
-                                        <label for="model" class="form-label">Select Model:</label>
-                                        <select name="model" id="model" class="form-select" required>
-                                            <option value="">Select a model</option>
-                                            {% if model_names %}
-                                                {% for model in model_names %}
-                                                    <option value="{{ model }}">{{ model }}</option>
-                                                {% endfor %}
-                                            {% else %}
-                                                <option value="" disabled>No models available</option>
-                                            {% endif %}
-                                        </select>
-                                    </div>
-                                    <div class="mb-4">
-                                        <div class="upload-area p-4 rounded border-2 border-dashed">
-                                            <input type="file" name="file" id="file" accept="image/*" class="form-control" required />
-                                        </div>
-                                    </div>
-                                    <button type="submit" class="btn btn-success btn-lg px-4">
-                                        <span class="button-text">Predict</span>
-                                        <span class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
-                                    </button>
-                                </form>
+              <div class="card shadow-sm mb-4">
+                <div class="card-body p-4">
+                  <form action="{{ url_for('predict') }}" method="POST" enctype="multipart/form-data" class="text-center">
+                    <div class="mb-4">
+                      <label for="model" class="form-label">Select Model:</label>
+                      <select name="model" id="model" class="form-select" required>
+                        <option value="">Select a model</option>
+                        {% if model_names %}
+                          {% for model in model_names %}
+                            <option value="{{ model }}">{{ model }}</option>
+                          {% endfor %}
+                        {% else %}
+                          <option value="" disabled>No models available</option>
+                        {% endif %}
+                      </select>
+                    </div>
+                    <div class="mb-4">
+                      <div class="upload-area p-4 rounded border-2 border-dashed">
+                        <input type="file" name="file" id="file" accept="image/*" class="form-control" required />
+                      </div>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-lg px-4">
+                      <span class="button-text">Predict</span>
+                      <span class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="prediction-results">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        {% if error %}
+                            <div class="alert alert-danger">
+                                {{ error }}
                             </div>
-                        </div>
-
-                        <div class="prediction-results">
-                            {% if prediction %}
-                                <div class="card shadow-sm mb-4">
-                                    <div class="card-body">
-                                        <h2 class="h4 text-center mb-3">Results</h2>
-                                        <p class="text-center mb-2">Disease Label: {{ prediction.label }}</p>
-                                        <p class="text-center text-success fw-bold">Confidence Score: {{ "%.2f"|format(prediction.confidence) }}%</p>
+                        {% elif class_name %}
+                            <h2 class="h4 text-center mb-3">Prediction Results</h2>
+                            <div class="text-center mb-4">
+                                <img src="{{ url_for('static', filename='uploads/' + image_name) }}" 
+                                     alt="Uploaded Image" 
+                                     class="img-fluid rounded shadow-sm" 
+                                     style="max-height: 400px;">
+                            </div>
+                            <div class="text-center">
+                                <h3 class="h5 mb-3">{{ class_name }}</h3>
+                                <div class="progress mb-3" style="height: 25px;">
+                                    <div class="progress-bar bg-success" 
+                                         role="progressbar" 
+                                         style="width: {{ confidence }}%;" 
+                                         aria-valuenow="{{ confidence }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        {{ "%.2f"|format(confidence) }}%
                                     </div>
                                 </div>
-                            {% endif %}
-                        </div>
-
-                        {% if success %}
-                            <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
-                                {{ success }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                <p class="text-muted">Model used: {{ model_used }}</p>
                             </div>
                         {% endif %}
-
-                        <div class="card shadow-sm mb-4">
-                            <div class="card-body p-4">
-                                <h2 class="h4 text-center mb-4">Contribute Training Data</h2>
-                                <form action="/contribute" method="POST" enctype="multipart/form-data" class="text-center">
-                                    <div class="mb-4">
-                                        <label for="disease_label" class="form-label">Disease Label:</label>
-                                        <select name="disease_label" id="disease_label" class="form-select" required>
-                                            <option value="">Select Disease Type</option>
-                                            {% for class_id, class_name in class_names.items() %}
-                                                <option value="{{ class_name }}">{{ class_name }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="mb-4">
-                                        <div class="upload-area p-4 rounded border-2 border-dashed">
-                                            <input type="file" name="training_images" id="training_images" accept="image/*" multiple class="form-control" required />
-                                            <small class="text-muted d-block mt-2">You can select multiple images (Max: 10 images)</small>
-                                        </div>
-                                    </div>
-                                    <button type="submit" class="btn btn-outline-success btn-lg px-4">Contribute Images</button>
-                                </form>
-                            </div>
-                        </div>
-
-                        <div class="text-center text-muted">
-                            <p class="mb-2">Project Team Members:</p>
-                            <div class="d-flex justify-content-center">
-                                <span class="member">JunHong</span>
-                                <span class="member">Darrel</span>
-                                <span class="member">WeiHerng</span>
-                            </div>
-                            <p class="mb-2">© 2024 Plant Disease Detection Project</p>
-                        </div>
-
-                        <div class="text-center mt-3">
-                            <a href="{{ url_for('debug') }}" class="btn btn-outline-secondary btn-sm">
-                                <i class="bi bi-bug"></i> Debug Info
-                            </a>
-                        </div>
                     </div>
                 </div>
+              </div>
+
+              {% if success %}
+                <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+                  {{ success }}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+              {% endif %}
+
+              <div class="card shadow-sm mb-4">
+                <div class="card-body p-4">
+                  <h2 class="h4 text-center mb-4">Contribute Training Data</h2>
+
+                  <div class="alert alert-warning mb-4" role="alert">
+                    <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill"></i> Important Note:</h5>
+                    <p class="mb-0">After contributing new images, please retrain the model to ensure it learns from the new data. Changes to the dataset require retraining for the model to recognize the updated patterns.</p>
+                  </div>
+
+                  <form action="/contribute" method="POST" enctype="multipart/form-data" class="text-center">
+                    <div class="mb-4">
+                      <label for="disease_label" class="form-label">Disease Label:</label>
+                      <select name="disease_label" id="disease_label" class="form-select" required>
+                        <option value="">Select Disease Type</option>
+                        {% for class_id, class_name in class_names.items() %}
+                          <option value="{{ class_name }}">{{ class_name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="mb-4">
+                      <div class="upload-area p-4 rounded border-2 border-dashed">
+                        <input type="file" name="training_images" id="training_images" accept="image/*" multiple class="form-control" required />
+                        <small class="text-muted d-block mt-2">Please select one image</small>
+                      </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-success btn-lg px-4">Contribute Images</button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="text-center text-muted">
+                <p class="mb-2">Project Team Members:</p>
+                <div class="d-flex justify-content-center">
+                  <span class="member">JunHong</span>
+                  <span class="member">Darrel</span>
+                  <span class="member">WeiHerng</span>
+                </div>
+                <p class="mb-2">© 2024 Plant Disease Detection Project</p>
+              </div>
+
+              <div class="text-center mt-3">
+                <a href="{{ url_for('debug') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-bug"></i> Debug Info</a>
+              </div>
             </div>
+          </div>
         </div>
+      </div>
     </div>
 
     <script>
-        // Your existing background image code
-        function setBackgroundImage(url) {
-            if (!url) {
-                console.log('No URL provided')
-                return
-            }
-          
-            console.log('Setting background image:', url)
-          
-            const img = new Image()
-            img.onload = function () {
-                console.log('Image loaded successfully')
-                document.body.style.backgroundImage = `url("/get_random_background")`
-            }
-            img.onerror = function () {
-                console.error('Failed to load background image:', url)
-            }
-            img.src = '/get_random_background'
+      // Your existing background image code
+      function setBackgroundImage(url) {
+        if (!url) {
+          console.log('No URL provided')
+          return
         }
-          
-        async function fetchNewBackground() {
-            try {
-                console.log('Fetching new background...')
-                setBackgroundImage('/get_random_background')
-            } catch (error) {
-                console.error('Error fetching background:', error)
-            }
+      
+        console.log('Setting background image:', url)
+      
+        const img = new Image()
+        img.onload = function () {
+          console.log('Image loaded successfully')
+          document.body.style.backgroundImage = `url("/get_random_background")`
         }
-          
-        document.addEventListener('DOMContentLoaded', function () {
-            fetchNewBackground()
-        })
-          
-        setInterval(fetchNewBackground, 30000)
+        img.onerror = function () {
+          console.error('Failed to load background image:', url)
+        }
+        img.src = '/get_random_background'
+      }
+      
+      async function fetchNewBackground() {
+        try {
+          console.log('Fetching new background...')
+          setBackgroundImage('/get_random_background')
+        } catch (error) {
+          console.error('Error fetching background:', error)
+        }
+      }
+      
+      document.addEventListener('DOMContentLoaded', function () {
+        fetchNewBackground()
+      })
+      
+      setInterval(fetchNewBackground, 30000)
     </script>
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
-    <!-- Error Modal -->
-    <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title" id="errorModalLabel">Error</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <div class="modal fade" id="aboutModal" tabindex="-1" aria-labelledby="aboutModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="aboutModalLabel">About Plantastic: Plant Disease Classification</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <h4>Project Overview</h4>
+            <p>Plantastic is a deep learning-based project that aims to identify plant diseases by analyzing images of plant leaves. The project uses computer vision and deep learning techniques to classify images into healthy or diseased categories and further classify the disease type. Users can not only get predictions for their plant leaves but also contribute to expanding our dataset by uploading their own labeled images through the web interface.</p>
+
+            <h4>Data Sources</h4>
+            <ul>
+              <li>
+                <strong>New Plant Diseases Dataset</strong> by Samir Bhattarai<ul>
+                  <li>Contains 87,000 colored images of healthy and diseased crop leaves</li>
+                  <li>38 classes of different plants in both healthy and diseased states</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Landscape Pictures Dataset</strong>
+                <ul>
+                  <li>Contains diverse environmental and landscape images</li>
+                  <li>Used for testing model robustness with non-plant images</li>
+                </ul>
+              </li>
+            </ul>
+
+            <h4>Model Architecture</h4>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="card h-100">
+                  <div class="card-header">
+                    <h5 class="mb-0">ResNet-50</h5>
+                  </div>
+                  <div class="card-body">
+                    <ul>
+                      <li>Deep residual network architecture</li>
+                      <li>Excellent at handling complex patterns</li>
+                      <li>Higher accuracy for detailed disease recognition</li>
+                      <li>Better for complex disease patterns</li>
+                    </ul>
+                  </div>
                 </div>
-                <div class="modal-body" id="errorModalBody">
-                    <!-- Error message will be inserted here -->
+              </div>
+              <div class="col-md-6">
+                <div class="card h-100">
+                  <div class="card-header">
+                    <h5 class="mb-0">EfficientNet-B0</h5>
+                  </div>
+                  <div class="card-body">
+                    <ul>
+                      <li>Lightweight and efficient architecture</li>
+                      <li>Balanced model size and accuracy</li>
+                      <li>Faster inference time</li>
+                      <li>Suitable for mobile deployment</li>
+                    </ul>
+                  </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
+              </div>
             </div>
+
+            <h4 class="mt-4">Future Developments</h4>
+            <ul>
+              <li>Custom CNN architecture optimized for Singapore's native plant species</li>
+              <li>Ensemble methods combining predictions from both models</li>
+              <li>Additional model architectures based on performance analysis</li>
+            </ul>
+
+            <h4>User Contributions</h4>
+            <div class="card mb-3">
+              <div class="card-body">
+                <h5 class="text-success">Help Expand Our Dataset!</h5>
+                <p>Users can contribute to improving our model by uploading their own plant leaf images:</p>
+                <ul>
+                  <li>
+                    <strong>How to Contribute:</strong>
+                    <ul>
+                      <li>Use the "Contribute Training Data" section at the bottom of the page</li>
+                      <li>Select the appropriate plant and disease condition</li>
+                      <li>Upload clear, well-lit images of plant leaves</li>
+                      <li>Upload multiple images at once (up to 10 images)</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong>Contribution Guidelines:</strong>
+                    <ul>
+                      <li>Images should focus on a single leaf showing disease symptoms</li>
+                      <li>Ensure proper lighting and clear visibility of symptoms</li>
+                      <li>Only upload images for conditions listed in our available classes</li>
+                      <li>Images will be reviewed before being added to the training dataset</li>
+                    </ul>
+                  </li>
+                </ul>
+                <div class="alert alert-info mb-0">
+                  <i class="bi bi-info-circle"></i> Your contributions help improve the model's accuracy and robustness for future predictions!
+                </div>
+              </div>
+            </div>
+
+            <h4>Team Members</h4>
+            <p class="text-muted mb-2">
+              Singapore Institute of Technology<br />
+              Computer Vision and Deep Learning Module
+            </p>
+            <ul>
+              <li>JunHong</li>
+              <li>Darrel</li>
+              <li>WeiHerng</li>
+            </ul>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
         </div>
+      </div>
     </div>
 
     <script>
-        function showError(message) {
-            const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
-            document.getElementById('errorModalBody').textContent = message;
-            errorModal.show();
-        }
-
-        {% if error %}
-            document.addEventListener('DOMContentLoaded', function() {
-                showError("{{ error }}");
+    document.querySelector('form[action*="predict"]').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const submitButton = this.querySelector('button[type="submit"]');
+        const buttonText = submitButton.querySelector('.button-text');
+        const spinner = submitButton.querySelector('.spinner-border');
+        
+        try {
+            // Update button state
+            buttonText.textContent = 'Processing...';
+            spinner.classList.remove('d-none');
+            submitButton.disabled = true;
+            
+            // Send the request
+            const response = await fetch(this.action, {
+                method: 'POST',
+                body: formData
             });
-        {% endif %}
-    </script>
-
-    <!-- Success Modal -->
-    <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title" id="successModalLabel">Success</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" id="successModalBody">
-                    <!-- Success message will be inserted here -->
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function showSuccess(message) {
-            const successModal = new bootstrap.Modal(document.getElementById('successModal'));
-            document.getElementById('successModalBody').textContent = message;
-            successModal.show();
+            
+            // Get the response HTML
+            const html = await response.text();
+            
+            // Replace the main content area with the response
+            const mainContent = document.querySelector('.page-content');
+            if (mainContent) {
+                mainContent.innerHTML = html;
+            } else {
+                // If we can't find the main content area, replace the entire body
+                document.body.innerHTML = html;
+            }
+            
+            // Scroll to top
+            window.scrollTo(0, 0);
+            
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred while processing your request.');
+        } finally {
+            // Reset button state
+            buttonText.textContent = 'Predict';
+            spinner.classList.add('d-none');
+            submitButton.disabled = false;
         }
+    });
     </script>
-</body>
+  </body>
 </html>

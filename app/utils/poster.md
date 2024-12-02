@@ -8,12 +8,13 @@ Key challenges addressed:
 - Early disease detection is critical for preventing crop losses
 - Need for accessible and accurate diagnostic tools for farmers
 
-## Objectives
-1. Develop an accurate and robust plant disease classification system using deep learning
-2. Create user-friendly interfaces for disease detection (both web and desktop)
-3. Support multiple model architectures (ResNet-50 and EfficientNet) for optimal performance
-4. Enable community contribution to expand the training dataset
-5. Provide real-time disease detection with confidence scores
+## Research Objectives
+Our project aims to:
+• Develop a deep learning system for accurate plant disease classification
+• Design intuitive interfaces for easy disease detection
+• Implement and compare multiple state-of-the-art model architectures
+• Create a collaborative platform for dataset expansion
+• Deliver real-time disease detection with confidence metrics
 
 ## Methodology/Proposed Approach
 

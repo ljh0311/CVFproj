@@ -104,7 +104,7 @@ class DatasetManager:
                 print("Dataset setup completed successfully!")
 
         except Exception as e:
-            print(f"\nError processing dataset: {str(e)}")
+            print(f"\nError processing landscape dataset: {str(e)}")
             # Clean up on error
             if is_plant_dataset:
                 for path in [temp_dir, dataset_path]:

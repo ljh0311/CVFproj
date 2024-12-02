@@ -20,6 +20,11 @@ class Config:
     TEST_DIR = os.path.join(DATASET_DIR, "test")
     VAL_DIR = os.path.join(DATASET_DIR, "valid")
     
+    # ZIP file paths
+    ZIP_PATH = os.path.join(DATA_DIR, "archive.zip")
+    PLANT_ZIP_PATH = os.path.join(DATA_DIR, "leafarchive.zip")
+    LANDSCAPE_ZIP_PATH = os.path.join(DATA_DIR, "landscapePhotos.zip")
+    
     # Model paths
     RESNET_MODEL_PATH = os.path.join(MODEL_DIR, "resnet50_model.pth")
     EFFICIENTNET_MODEL_PATH = os.path.join(MODEL_DIR, "efficientnet_model.pth")
@@ -31,10 +36,6 @@ class Config:
     
     # Checkpoint paths
     LAST_CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, "last_checkpoint.pth")
-    
-    # Archive paths
-    PLANT_ZIP_PATH = os.path.join(DATA_DIR, "leafarchive.zip")
-    LANDSCAPE_ZIP_PATH = os.path.join(DATA_DIR, "landscapePhotos.zip")
     
     # Hyperparameters
     EPOCHS = 10
